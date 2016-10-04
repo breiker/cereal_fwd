@@ -131,6 +131,11 @@ BOOST_AUTO_TEST_CASE( json_string_basic )
   test_string_basic<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_string )
+{
+  test_string_all<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
+
 template <class IArchive, class OArchive, class Out, class In = Out>
 void test_ws_in_out(Out const & o_value_with_ws)
 {

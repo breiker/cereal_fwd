@@ -162,3 +162,8 @@ BOOST_AUTO_TEST_CASE( json_pod )
 {
   test_pod<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
+
+BOOST_AUTO_TEST_CASE( extendable_binary_pod )
+{
+  test_pod<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

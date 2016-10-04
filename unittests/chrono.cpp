@@ -120,4 +120,7 @@ BOOST_AUTO_TEST_CASE( json_chrono )
   test_chrono<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
-
+BOOST_AUTO_TEST_CASE( extendable_binary_chrono )
+{
+  test_chrono<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

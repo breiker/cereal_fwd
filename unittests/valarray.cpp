@@ -117,3 +117,8 @@ BOOST_AUTO_TEST_CASE(json_valarray)
 {
   test_valarray<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
+
+BOOST_AUTO_TEST_CASE( extendable_binary_valarray )
+{
+  test_valarray<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

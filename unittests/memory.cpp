@@ -152,3 +152,9 @@ BOOST_AUTO_TEST_CASE( json_default_construction )
 {
   test_default_construction<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
+
+BOOST_AUTO_TEST_CASE( extendable_binary_default_construction )
+{
+  test_default_construction<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
+

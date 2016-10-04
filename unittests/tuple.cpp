@@ -117,3 +117,7 @@ BOOST_AUTO_TEST_CASE( json_tuple )
   test_tuple<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_tuple )
+{
+  test_tuple<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

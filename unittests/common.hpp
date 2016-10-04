@@ -51,6 +51,7 @@
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/archives/portable_binary.hpp>
+#include <cereal/archives/extendable_binary.hpp>
 #include <cereal/archives/xml.hpp>
 #include <cereal/archives/json.hpp>
 #include <limits>
@@ -112,6 +113,16 @@ random_value(std::mt19937 & gen)
   std::string s(std::uniform_int_distribution<int>(3, 30)(gen), ' ');
   for(char & c : s)
     c = static_cast<char>( std::uniform_int_distribution<int>( 'A', 'Z' )(gen) );
+  return s;
+}
+
+template<class T> inline
+typename std::enable_if<std::is_same<T, typename std::array<typename T::value_type, std::tuple_size<T>::value>>::value, T>::type
+random_value(std::mt19937 & gen)
+{
+  T s;
+  for(typename T::value_type & c : s)
+    c = random_value<typename T::value_type>(gen);
   return s;
 }
 

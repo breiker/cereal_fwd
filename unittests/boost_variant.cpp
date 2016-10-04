@@ -85,3 +85,7 @@ BOOST_AUTO_TEST_CASE( json_boost_variant )
 }
 
 
+BOOST_AUTO_TEST_CASE( extendable_binary_varint )
+{
+  test_boost_variant<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

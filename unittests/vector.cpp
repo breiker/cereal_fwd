@@ -126,4 +126,7 @@ BOOST_AUTO_TEST_CASE( json_vector )
   test_vector<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
-
+BOOST_AUTO_TEST_CASE( extendable_binary_vector )
+{
+  test_vector<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

@@ -212,6 +212,11 @@ BOOST_AUTO_TEST_CASE( json_versioning )
   test_versioning<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_versioning )
+{
+  test_versioning<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
+
 #if CEREAL_THREAD_SAFE
 template <class IArchive, class OArchive>
 void test_versioning_threading()
@@ -246,5 +251,10 @@ BOOST_AUTO_TEST_CASE( xml_versioning_threading )
 BOOST_AUTO_TEST_CASE( json_versioning_threading )
 {
   test_versioning_threading<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
+}
+
+BOOST_AUTO_TEST_CASE( extendable_binary_versioning_threading )
+{
+  test_versioning_threading<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
 }
 #endif // CEREAL_THREAD_SAFE

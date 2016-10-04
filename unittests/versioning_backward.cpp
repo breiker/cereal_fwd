@@ -37,6 +37,25 @@
 #include <boost/test/unit_test.hpp>
 
 
+template<class T>
+struct StructBaseT
+{
+  StructBaseT() {}
+  StructBaseT( int xx, T yy ) : x( xx ), y( yy ) {}
+  int x;
+  T y;
+  bool operator==(StructBase const & other) const
+  { return x == other.x && y == other.y; }
+  bool operator!=(StructBase const & other) const
+  { return x != other.x || y != other.y; }
+  bool operator<(StructBase const & other) const
+  {
+    if (x < other.x) return true;
+    else if(other.x < x) return false;
+    else return (y < other.y);
+  }
+};
+
 /** old application */
 struct InnerOld : public StructBase
 {
@@ -60,31 +79,36 @@ struct OuterOld
     template<class Archive>
     void serialize(Archive & ar, const std::uint32_t)
     {
-      ar( inner, x, y );
+//      ar( inner, x, y );
+      ar( inner/*, x, y */);
+      ar( /*inner,*/ x/*, y */);
+      ar( /*inner, x,*/ y );
     }
 };
 
 /** new application */
-struct InnerNew : public StructBase
+template<class NewType>
+struct InnerNew : public StructBaseT<NewType>
 {
-    InnerNew() : StructBase{0, 0} {}
-    InnerNew(int x_, int y_) : StructBase(x_, y_) {}
+    InnerNew() : StructBaseT<NewType>{0, 0} {}
+    InnerNew(int x_, const NewType& y_) : StructBaseT<NewType>(x_, y_) {}
 
     template<class Archive>
     void serialize( Archive & ar, const std::uint32_t version )
     {
-      ar( x );
+      ar( this->x );
       if( version >= 1 )
-        ar( y );
+        ar( this->y );
     }
 };
 
+template <class NewType = int>
 struct OuterNew
 {
     OuterNew() : x(0), y(0) {}
-    OuterNew(int x_, int y_, int xi_, int yi_) : x(x_), y(y_), inner(xi_, yi_) {}
+    OuterNew(int x_, int y_, int xi_, const NewType& yi_) : x(x_), y(y_), inner(xi_, yi_) {}
     int x, y;
-    InnerNew inner;
+    InnerNew<NewType> inner;
 
     template<class Archive>
     void serialize(Archive & ar, const std::uint32_t)
@@ -94,8 +118,6 @@ struct OuterNew
 };
 
 
-CEREAL_CLASS_VERSION( InnerNew, 1 )
-
 
 template <class IArchive, class OArchive>
 void test_backward_support()
@@ -103,10 +125,10 @@ void test_backward_support()
   std::random_device rd;
   std::mt19937 gen(rd());
 
-  for(int ii=0; ii<2/*100*/; ++ii)
+  for(int ii=0; ii<100; ++ii)
   {
-    OuterNew o_struct = { random_value<int>(gen), random_value<int>(gen) ,
-                          random_value<int>(gen), random_value<int>(gen) };
+    OuterOld o_struct = { random_value<int>(gen), random_value<int>(gen) ,
+                          random_value<int>(gen) };
 
     std::ostringstream os;
     {
@@ -114,7 +136,7 @@ void test_backward_support()
       oar( o_struct );
     }
 
-    OuterOld i_struct;
+    OuterNew<int> i_struct;
 
     std::istringstream is(os.str());
     {
@@ -149,3 +171,149 @@ BOOST_AUTO_TEST_CASE( portable_binary_backward_support )
   test_backward_support<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_backward_support )
+{
+  test_backward_support<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
+
+template <class IArchive, class OArchive>
+void test_forward_support()
+{
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  for(int ii=0; ii<100; ++ii)
+  {
+    OuterNew<> o_struct = { random_value<int>(gen), random_value<int>(gen) ,
+                          random_value<int>(gen), random_value<int>(gen) };
+
+    std::ostringstream os;
+    {
+      OArchive oar(os);
+      oar( o_struct );
+    }
+
+    OuterOld i_struct;
+
+    std::istringstream is(os.str());
+    {
+      IArchive iar(is);
+      iar( i_struct );
+    }
+
+    BOOST_CHECK(0 == i_struct.inner.y);
+    BOOST_CHECK(o_struct.inner.x == i_struct.inner.x);
+    BOOST_CHECK(o_struct.x == i_struct.x);
+    BOOST_CHECK(o_struct.y == i_struct.y);
+  }
+}
+
+BOOST_AUTO_TEST_CASE( xml_forward_support )
+{
+  test_forward_support<cereal::XMLInputArchive, cereal::XMLOutputArchive>();
+}
+
+BOOST_AUTO_TEST_CASE( json_forward_support )
+{
+  test_forward_support<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
+}
+
+BOOST_AUTO_TEST_CASE( extendable_binary_forward_support )
+{
+  test_forward_support<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
+
+template <class IArchive, class OArchive, class NewType>
+void test_forward_support_extended()
+{
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  for(int ii=0; ii<100; ++ii)
+  {
+    OuterNew<NewType> o_struct = { random_value<int>(gen), random_value<int>(gen),
+                                   random_value<int>(gen), random_value<NewType>(gen)};
+
+    std::ostringstream os;
+    {
+      OArchive oar(os);
+      oar( o_struct );
+    }
+
+    OuterOld i_struct;
+
+    std::istringstream is(os.str());
+    {
+      IArchive iar(is);
+      iar( i_struct );
+    }
+
+    BOOST_CHECK(0 == i_struct.inner.y);
+    BOOST_CHECK(o_struct.inner.x == i_struct.inner.x);
+    BOOST_CHECK(o_struct.x == i_struct.x);
+    BOOST_CHECK(o_struct.y == i_struct.y);
+  }
+}
+
+BOOST_AUTO_TEST_CASE( xml_forward_support_extended )
+{
+  test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, int>();
+  test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, float>();
+  test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, bool>();
+  test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, std::uint8_t>();
+  test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, std::uint16_t>();
+  test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, std::uint64_t>();
+
+  test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, std::string>();
+  test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, std::array<std::uint16_t, 4>>();
+}
+
+BOOST_AUTO_TEST_CASE( json_forward_support_extended )
+{
+  test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, int>();
+  test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, float>();
+  test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, bool>();
+  test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, std::uint8_t>();
+  test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, std::uint16_t>();
+  test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, std::uint64_t>();
+
+  test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, std::string>();
+  test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, std::array<std::uint16_t, 4>>();
+}
+
+BOOST_AUTO_TEST_CASE( extendable_binary_forward_support_extended )
+{
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, int>();
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, float>();
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, bool>();
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, std::uint8_t>();
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, std::uint16_t>();
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, std::uint64_t>();
+
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, std::string>();
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, std::array<std::uint16_t, 4>>();
+}
+
+BOOST_AUTO_TEST_CASE( portable_binary_forward_support_extended )
+{
+//  test_forward_support_extended<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive, int>(); // fails
+//  test_forward_support_extended<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive, float>(); // fails
+//  test_forward_support_extended<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive, bool>(); // failes
+//  test_forward_support_extended<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive, std::uint8_t>(); // failes
+//  test_forward_support_extended<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive, std::uint16_t>(); // failes
+//  test_forward_support_extended<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive, std::uint64_t>(); // failes
+
+//  test_forward_support_extended<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive, std::string>(); // failes
+//  test_forward_support_extended<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive, std::array<std::uint16_t, 4>>(); // failes
+}
+
+#define CEREAL_MACRO_COMMA ,
+CEREAL_CLASS_VERSION( InnerNew<int>, 1 )
+CEREAL_CLASS_VERSION( InnerNew<float>, 1 )
+CEREAL_CLASS_VERSION( InnerNew<bool>, 1 )
+CEREAL_CLASS_VERSION( InnerNew<std::uint8_t>, 1 )
+CEREAL_CLASS_VERSION( InnerNew<std::uint16_t>, 1 )
+CEREAL_CLASS_VERSION( InnerNew<std::uint64_t>, 1 )
+CEREAL_CLASS_VERSION( InnerNew<std::string>, 1 )
+CEREAL_CLASS_VERSION( InnerNew< std::array<std::uint16_t CEREAL_MACRO_COMMA 4> >, 1 )
+#undef CEREAL_MACRO_COMMA

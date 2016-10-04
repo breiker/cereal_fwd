@@ -49,3 +49,4 @@ build
 /out/
 .project
 .cproject
+.idea/

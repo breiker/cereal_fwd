@@ -349,6 +349,11 @@ BOOST_AUTO_TEST_CASE( json_polymorphic )
   test_polymorphic<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_polymorphic )
+{
+  test_polymorphic<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
+
 #if CEREAL_THREAD_SAFE
 template <class IArchive, class OArchive>
 void test_polymorphic_threading()

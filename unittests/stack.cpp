@@ -123,3 +123,7 @@ BOOST_AUTO_TEST_CASE( json_stack )
   test_stack<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_stack )
+{
+  test_stack<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

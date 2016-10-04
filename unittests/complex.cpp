@@ -93,4 +93,8 @@ BOOST_AUTO_TEST_CASE( json_complex )
   test_complex<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_complex )
+{
+  test_complex<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
 

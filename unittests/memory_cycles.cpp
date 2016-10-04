@@ -159,3 +159,7 @@ BOOST_AUTO_TEST_CASE( json_memory_cycles )
   test_memory_cycles<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_memory_cycles )
+{
+  test_memory_cycles<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

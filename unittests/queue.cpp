@@ -123,3 +123,7 @@ BOOST_AUTO_TEST_CASE( json_queue )
   test_queue<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_queue )
+{
+  test_queue<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2014, Randolph Voorhies, Shane Grant
+  Copyright (c) 2016, Randolph Voorhies, Shane Grant, Michal Breiter
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -16,7 +16,7 @@
   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
   ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  DISCLAIMED. IN NO EVENT SHALL RANDOLPH VOORHIES AND SHANE GRANT BE LIABLE FOR ANY
+  DISCLAIMED. IN NO EVENT SHALL RANDOLPH VOORHIES AND SHANE GRANT AND MICHAL BREITER BE LIABLE FOR ANY
   DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
   (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
   LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
@@ -27,64 +27,55 @@
 #include "common.hpp"
 #include <boost/test/unit_test.hpp>
 
-template <class IArchive, class OArchive>
-void test_structs()
+
+#define CEREAL_TEST_CHECK_EQUAL_INTEGER                  \
+    BOOST_CHECK_EQUAL(i_uint8  , o_uint8);               \
+    BOOST_CHECK_EQUAL(i_uint16 , o_uint16);              \
+    BOOST_CHECK_EQUAL(i_uint32 , o_uint32);              \
+    BOOST_CHECK_EQUAL(i_uint64 , o_uint64);
+
+
+
+BOOST_AUTO_TEST_CASE( extendable_archive_varint )
 {
   std::random_device rd;
   std::mt19937 gen(rd());
 
-  for(int ii=0; ii<100; ++ii)
+  for(size_t i=0; i<1000; ++i)
   {
-    StructInternalSerialize o_iser = { random_value<int>(gen), random_value<int>(gen) };
-    StructInternalSplit     o_ispl = { random_value<int>(gen), random_value<int>(gen) };
-    StructExternalSerialize o_eser = { random_value<int>(gen), random_value<int>(gen) };
-    StructExternalSplit     o_espl = { random_value<int>(gen), random_value<int>(gen) };
+    uint8_t  o_uint8  = random_value<uint8_t>(gen);
+    uint16_t o_uint16 = random_value<uint16_t>(gen);
+    uint32_t o_uint32 = random_value<uint32_t>(gen);
+    uint64_t o_uint64 = random_value<uint64_t>(gen);
+
 
     std::ostringstream os;
     {
-      OArchive oar(os);
-      oar( o_iser, o_ispl, o_eser, o_espl);
+      cereal::ExtendableBinaryOutputArchive oar(os);
+
+      oar.saveVarint(o_uint8);
+      oar.saveVarint(o_uint16);
+      oar.saveVarint(o_uint32);
+      oar.saveVarint(o_uint64);
     }
 
-    StructInternalSerialize i_iser;
-    StructInternalSplit     i_ispl;
-    StructExternalSerialize i_eser;
-    StructExternalSplit     i_espl;
+    uint8_t  i_uint8  = 0;
+    uint16_t i_uint16 = 0;
+    uint32_t i_uint32 = 0;
+    uint64_t i_uint64 = 0;
 
     std::istringstream is(os.str());
     {
-      IArchive iar(is);
-      iar( i_iser, i_ispl, i_eser, i_espl);
+      cereal::ExtendableBinaryInputArchive iar(is);
+      iar.loadVarint(i_uint8);
+      iar.loadVarint(i_uint16);
+      iar.loadVarint(i_uint32);
+      iar.loadVarint(i_uint64);
     }
 
-    BOOST_CHECK(i_iser == o_iser);
-    BOOST_CHECK(i_ispl == o_ispl);
-    BOOST_CHECK(i_eser == o_eser);
-    BOOST_CHECK(i_espl == o_espl);
+    CEREAL_TEST_CHECK_EQUAL_INTEGER
   }
 }
 
-BOOST_AUTO_TEST_CASE( binary_structs )
-{
-  test_structs<cereal::BinaryInputArchive, cereal::BinaryOutputArchive>();
-}
 
-BOOST_AUTO_TEST_CASE( portable_binary_structs )
-{
-  test_structs<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive>();
-}
-
-BOOST_AUTO_TEST_CASE( xml_structs )
-{
-  test_structs<cereal::XMLInputArchive, cereal::XMLOutputArchive>();
-}
-
-BOOST_AUTO_TEST_CASE( json_structs )
-{
-  test_structs<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
-}
-
-BOOST_AUTO_TEST_CASE( extendable_binary_structs )
-{
-  test_structs<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
-}
+#undef CEREAL_TEST_CHECK_EQUAL

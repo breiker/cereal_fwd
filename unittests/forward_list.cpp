@@ -110,3 +110,8 @@ BOOST_AUTO_TEST_CASE( json_forward_list )
 {
   test_forward_list<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
+
+BOOST_AUTO_TEST_CASE( extendable_binary_forward_list )
+{
+  test_forward_list<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}

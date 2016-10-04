@@ -107,3 +107,7 @@ BOOST_AUTO_TEST_CASE( json_pair )
   test_pair<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_pair )
+{
+  test_pair<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
