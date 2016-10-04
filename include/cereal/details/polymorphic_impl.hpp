@@ -460,13 +460,13 @@ namespace cereal
         std::uint32_t id = ar.registerPolymorphicType(name);
 
         // Serialize the id
-        ar( CEREAL_NVP_("polymorphic_id", id) );
+        ar( CEREAL_NVP_("polymorphic_id", make_polymorphic_id_tag(id)) );
 
         // If the msb of the id is 1, then the type name is new, and we should serialize it
         if( id & detail::msb_32bit )
         {
           std::string namestring(name);
-          ar( CEREAL_NVP_("polymorphic_name", namestring) );
+          ar( CEREAL_NVP_("polymorphic_name", make_polymorphic_key_tag(namestring)) );
         }
       }
 
