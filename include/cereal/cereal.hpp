@@ -324,6 +324,11 @@ namespace cereal
           return id->second;
       }
 
+      //! indicates if archive is used for saving
+      using is_saving = std::true_type;
+      //! indicates if archive is used for loading
+      using is_loading = std::false_type;
+
     private:
       //! Serializes data after calling prologue, then calls epilogue
       template <class T> inline
@@ -692,6 +697,12 @@ namespace cereal
         std::uint32_t const stripped_id = id & ~detail::msb_32bit;
         itsPolymorphicTypeMap.insert( {stripped_id, name} );
       }
+
+
+      //! indicates if archive is used for saving
+      using is_saving = std::false_type;
+      //! indicates if archive is used for loading
+      using is_loading = std::true_type;
 
     private:
       //! Serializes data after calling prologue, then calls epilogue
