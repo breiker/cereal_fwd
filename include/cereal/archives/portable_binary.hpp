@@ -322,6 +322,16 @@ namespace cereal
 
     ar.template loadBinary<sizeof(TT)>( bd.data, static_cast<std::size_t>( bd.size ) );
   }
+
+  //! Serializing OmmitedFieldTag to binary
+  /*! Ommiting field in binary archive is supported only if other side is also ommiting this field */
+  template <class Archive> inline
+  CEREAL_ARCHIVE_RESTRICT(PortableBinaryInputArchive, PortableBinaryOutputArchive)
+  CEREAL_SERIALIZE_FUNCTION_NAME( Archive &, OmittedFieldTag & )
+  { }
+
+  /** prologue and epilogue */
+
 } // namespace cereal
 
 // register archives for polymorphic support

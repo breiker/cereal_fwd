@@ -782,6 +782,26 @@ namespace cereal
   { }
 
   // ######################################################################
+  //! Prologue for OmmitedFieldTag for XML output archives
+  /*! OmmitedFieldTag do not start or finish nodes */
+  inline
+  void prologue( XMLOutputArchive &, OmittedFieldTag const & )
+  { }
+
+  inline
+  void prologue( XMLInputArchive &, OmittedFieldTag const & )
+  { }
+
+  //! Epilogue for OmmitedFieldtag for XML output archives
+  /*! OmitedFieldtag do not start or finish nodes */
+  template <class T> inline
+  void epilogue( XMLOutputArchive &, OmittedFieldTag const & )
+  { }
+
+  template <class T> inline
+  void epilogue( XMLInputArchive &, OmittedFieldTag const & )
+  { }
+  // ######################################################################
   //! Prologue for all other types for XML output archives (except minimal types)
   /*! Starts a new node, named either automatically or by some NVP,
       that may be given data by the type about to be archived
@@ -885,6 +905,13 @@ namespace cereal
   {
     ar.loadValue( str );
   }
+
+  //! Serializing OmmitedFieldTag to binary
+  /*! Ommiting field in xml archive is noop */
+  template <class Archive> inline
+  CEREAL_ARCHIVE_RESTRICT(XMLInputArchive, XMLOutputArchive)
+  CEREAL_SERIALIZE_FUNCTION_NAME( Archive &, OmittedFieldTag & )
+  { }
 } // namespace cereal
 
 // register archives for polymorphic support

@@ -284,6 +284,13 @@ namespace cereal
 
       Type size;
   };
+  //! Tag used to indicate that field is ommited from the archive
+  /*! Field will not be saved and not be loaded. It's used in
+   *  some archives to keep order and match fields with version of the same class which is
+   *  not ommiting that field.
+   */
+  class OmittedFieldTag
+  { };
 
   //! A wrapper around polymorphic id
   /*! This class provides a way for custom handing of polymorphic id in archives

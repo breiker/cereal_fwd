@@ -773,6 +773,27 @@ namespace cereal
   { }
 
   // ######################################################################
+  //! Prologue for OmmitedFieldTag for JSON output archives
+  /*! OmmitedFieldTag do not start or finish nodes */
+  inline
+  void prologue( JSONOutputArchive &, OmittedFieldTag const & )
+  { }
+
+  inline
+  void prologue( JSONInputArchive &, OmittedFieldTag const & )
+  { }
+
+  //! Epilogue for OmmitedFieldtag for JSON output archives
+  /*! OmitedFieldtag do not start or finish nodes */
+  template <class T> inline
+  void epilogue( JSONOutputArchive &, OmittedFieldTag const & )
+  { }
+
+  template <class T> inline
+  void epilogue( JSONInputArchive &, OmittedFieldTag const & )
+  { }
+
+  // ######################################################################
   //! Prologue for all other types for JSON archives (except minimal types)
   /*! Starts a new node, named either automatically or by some NVP,
       that may be given data by the type about to be archived
@@ -963,6 +984,13 @@ namespace cereal
   {
     ar.loadSize( st.size );
   }
+
+  //! Serializing OmmitedFieldTag to binary
+  /*! Ommiting field in json archive is noop */
+  template <class Archive> inline
+  CEREAL_ARCHIVE_RESTRICT(JSONInputArchive, JSONOutputArchive)
+  CEREAL_SERIALIZE_FUNCTION_NAME( Archive &, OmittedFieldTag & )
+  { }
 } // namespace cereal
 
 // register archives for polymorphic support
