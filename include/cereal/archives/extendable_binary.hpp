@@ -57,39 +57,101 @@ namespace cereal
     }
 
     //! Describes type of saved field
-    enum class FieldType {
-      /*! int (0000 | ssss)  size in bytes
-          need to store up to 256 bytes - 0,1,2,4,8,16,32 - 7 values
-          | 0000 - 0 | 0001:  1 | 0010:  2 | 0011:  3 | 0100:  4 | 0101:  5 | 0110:  6 | 0111:  7 |
-          |          | 1001: -1 | 1010: -2 | 1011: -3 | 1100: -4 | 1101: -5 | 1110: -6 | 1111: -7 |
-          Reduce to 128 bytes and add bit? 256 bytes? */
-      positive_integer = 0x0,
-      /*! int (0000 | ssss)  size in bytes
-          need to store up to 256 bytes - 0,1,2,4,8,16,32 - 7 values
-          | 0000 - 0 | 0001:  1 | 0010:  2 | 0011:  3 | 0100:  4 | 0101:  5 | 0110:  6 | 0111:  7 |
-          |          | 1001: -1 | 1010: -2 | 1011: -3 | 1100: -4 | 1101: -5 | 1110: -6 | 1111: -7 |
-          Reduce to 128 bytes and add bit? 256 bytes? */
-      negative_integer = 0x1,
-      //! float (0001 | ????)
-      floating_point = 0x2,
-      //! int packed (0010) (optional)
-      integer_packed = 0x3,
-      /*! class (0011)
-            pointer
-            virtual - typeid follows */
-      class_t = 0x4,
-      /*! packed array (0100 | size of elem)
+    /*! Max size if four bits, then four bits for field specific encoding */
+    enum class FieldType
+    {
+      //! omitted field (0000)
+      omitted_field = 0x0,
+      /*! int (0001 | ssss)  size in bytes
+          Size is stored with one byte intervals up to 8 bytes, then full sizes.
+          Max size 16 bytes */
+      positive_integer = 0x1,
+      /*! int (0010 | ssss)  size in bytes
+          Size is stored with one byte intervals up to 8 bytes, then full sizes.
+          Max size 16 bytes */
+      negative_integer = 0x2,
+      //! float (0011 | size_of_floating_point)
+      floating_point = 0x3,
+      //! int packed (0100) (optional)
+      integer_packed = 0x4,
+      /*! class (0101) */
+      class_t = 0x5,
+      /*! pointer (0110)
+           null
+           shared - objectid follows
+           virtual - typeid follows */
+      pointer = 0x6,
+      /*! size for packed_array or containers (0111 | ssss) size in bytes
+          size mapping @see positive_integer or @see getIntSizeFromTagSize */
+      size_tag = 0x7,
+      /*! packed array (1000 | size of elem)
           e.g. string */
-      packed_array = 0x5,
-      //! struct (0101)
-      packed_struct = 0x6,
-      //! omitted field (0110)
-      ommited_field = 0x7,
-      /*! was last field in class (0111)
+      packed_array = 0x8,
+      //! struct (1001)
+      packed_struct = 0x9,
+      /*! was last field in class (1010)
        (not optional fields, class id) */
-      last_field = 0x8,
+      last_field = 0xa,
       LAST_RESERVED_UNUSED
     };
+
+    //! Markers for FieldType::class_t
+    /*! Max size is four bits */
+    enum class ClassMarkers : std::uint8_t
+    {
+      //! for initialization or lack of properties
+      None = 0,
+      //! optimalization for class without empty fields
+      /*! After empty class FieldType::last_field is not saved to save some space.*/
+      EmptyClass = 0x1 << 0,
+      // ! this class has version set to value bigger than 0
+      /*! After this tag version as varint is saved, so usually 1 byte. */
+      HasVersion = 0x1 << 1,
+    };
+
+    ClassMarkers& operator|=(ClassMarkers& l, ClassMarkers r)
+    {
+      l = static_cast<ClassMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
+      return l;
+    }
+    ClassMarkers operator|(ClassMarkers l, ClassMarkers r)
+    {
+      return static_cast<ClassMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
+    }
+    std::uint8_t operator&(ClassMarkers l, ClassMarkers r)
+    {
+      return static_cast<std::uint8_t>(l) & static_cast<std::uint8_t>(r);
+    }
+
+    //! Markers for FieldType::pointer
+    /*! Max size is four bits */
+    enum class PointerMarkers : std::uint8_t
+    {
+      //! for initialization or lack of properties
+      None = 0,
+      //! nullptr or object with the same objectid was already saved
+      Empty = 0x1 << 0, // None (0) can be used
+      //! Pointer is shared (shared or weak_ptr)
+      /*! After this tag object id as varint will be saved */
+      IsSharedPtr = 0x1 << 1,
+      //! Pointer is polymorphic, casting will be needed
+      /*! After this tag polymorphic id as 4 byte std::int32_t will be saved */
+      IsPolymorphicPointer = 0x1 << 2
+    };
+
+    PointerMarkers& operator|=(PointerMarkers& l, PointerMarkers r)
+    {
+      l = static_cast<PointerMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
+      return l;
+    }
+    PointerMarkers operator|(PointerMarkers l, PointerMarkers r)
+    {
+      return static_cast<PointerMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
+    }
+    std::uint8_t operator&(PointerMarkers l, PointerMarkers r)
+    {
+      return static_cast<std::uint8_t>(l) & static_cast<std::uint8_t>(r);
+    }
 
     //! max size of saved varint
     /*! enough to save uint64_t 8 */
@@ -107,12 +169,13 @@ namespace cereal
       return std::make_pair(static_cast<FieldType>(fieldType), (0xf & input));
     }
 
-    //!
+    //! Get number of bytes needed to save value.
     /*! TODO can be done quicker http://stackoverflow.com/questions/2274428/how-to-determine-how-many-bytes-an-integer-needs
-       \param v
-       \return */
+       \param v value to check
+       \return number of bytes needed to save this value */
     template <class T> inline
-    std::uint8_t getHighestBit(T v) {
+    std::uint8_t getHighestBit(T v)
+    {
       // TODO fix for big endian
       std::uint8_t n = 0;
       while( v != 0 ) {
@@ -121,12 +184,16 @@ namespace cereal
       }
       return n;
     }
-    //! shift count >= width of type [-Werror,-Wshift-count-overflow]
-    inline std::uint8_t getHighestBit(std::uint8_t) {
+
+    //! Get number of bytes needed to save value.
+    /*! Separate function is needed because of error "shift count >= width of type [-Werror,-Wshift-count-overflow]" */
+    inline std::uint8_t getHighestBit(std::uint8_t)
+    {
       return 1;
     }
 
-    inline std::uint8_t getFloatSizeFromTagSize(std::uint8_t tagSize) {
+    inline std::uint8_t getFloatSizeFromTagSize(std::uint8_t tagSize)
+    {
       switch (tagSize) {
         case 1:
           return 4;
@@ -139,8 +206,9 @@ namespace cereal
       }
     }
 
-    template <class T>
-    inline std::uint8_t getTagSizeFromFloatType() {
+    template <class T> inline
+    std::uint8_t getTagSizeFromFloatType()
+    {
       static_assert(sizeof(T) == 4 || sizeof(T) == 8 || sizeof(T) == 16, "unsupported floating point type");
       static_assert(std::is_floating_point<T>::value, "expected floating point type");
       switch (sizeof(T)) {
@@ -150,6 +218,40 @@ namespace cereal
           return 2;
         case 16:
           return 3;
+      }
+    }
+
+    inline std::uint8_t getIntSizeFromTagSize(std::uint8_t tagSize)
+    {
+      switch (tagSize) {
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+        case 6:
+        case 7:
+        case 8:
+          return tagSize;
+        case 9:
+          return 16;
+        case 10:
+          return 32;
+        default:
+          throw Exception("Unsupported int size");
+      }
+    }
+
+    inline std::uint8_t getIntSizeTagFromByteCount(unsigned int byteCount) {
+      if(byteCount <= 8) {
+        return byteCount;
+      } else if(byteCount <= 16) {
+        return 9;
+      } else if(byteCount <= 32) {
+        return 10;
+      } else {
+        throw Exception("Unsupported int size");
       }
     }
   } // end namespace extendable_binary_detail
@@ -167,7 +269,7 @@ namespace cereal
       inadvertently. This is especially important on Windows since on Linux it's noop.
 
     \ingroup Archives */
-  class ExtendableBinaryOutputArchive : public OutputArchive<ExtendableBinaryOutputArchive, AllowEmptyClassElision>
+  class ExtendableBinaryOutputArchive : public OutputArchive<ExtendableBinaryOutputArchive, Flags::ForwardSupport>
   {
     public:
       //! A class containing various advanced options for the ExtendableBinaryOutput archive
@@ -210,7 +312,7 @@ namespace cereal
           @param options The ExtendableBinary specific options to use.  See the Options struct
                          for the values of default parameters */
       ExtendableBinaryOutputArchive(std::ostream & stream, Options const & options = Options::Default()) :
-        OutputArchive<ExtendableBinaryOutputArchive, AllowEmptyClassElision>(this),
+        OutputArchive<ExtendableBinaryOutputArchive, Flags::ForwardSupport>(this),
         itsStream(stream),
         itsConvertEndianness( extendable_binary_detail::is_little_endian() ^ options.is_little_endian() )
       {
@@ -258,7 +360,148 @@ namespace cereal
         saveBinary<sizeof(std::uint8_t)>(buffer.data(), size + 1);
       }
 
+      void saveObjectBeginning()
+      {
+        // if object to save - save it
+        if(objectDataNeedsSaving) {
+          saveObjectData(false);
+        }
+        objectDataNeedsSaving = true;
+      }
+
+      void saveClassVersion(std::uint32_t version)
+      {
+        classVersion = version;
+      }
+
+      void saveObjectId(std::uint32_t objectId_)
+      {
+        isPointer = true;
+        objectId = objectId_;
+      }
+
+      void savePointerValidityTag(bool /*valid*/)
+      {
+        isPointer = true;
+      }
+
+      void savePolymorphicId(std::int32_t polymorphicId_)
+      {
+        isPointer = true;
+        polymorphicId = polymorphicId_;
+      }
+
+      void savePolymorphicName(const std::string& name)
+      {
+        polymorphicName = name;
+      }
+
+      void savingOtherField()
+      {
+        if(objectDataNeedsSaving) {
+          saveObjectData(false);
+        }
+      }
+
+      //! Writes object properites to stream. Called in prologue for objects
+      template<class T> // template only for debug
+      void saveObjectEnd()
+      {
+        if(objectDataNeedsSaving) {
+          // no other fields were saved we have to save objectData with empty marker
+          saveObjectData(true);
+          std::cout << "epilogue (EMPTY):" << typeid(T).name() << "\n";
+        } else{
+          // there were fields in class, have to save end marker
+          saveEndMarker();
+          std::cout << "epilogue (NORMAL):" << typeid(T).name() << "\n";
+          /* TODO we are saving last_field marker for pointers even if it's not needed
+           * Easiest way to solve it wold be to make queue of save object types in archive to know that we don't have to save it.
+           * But that would mean that we would have to allocate some memory. We could also make specializations for prologue for pointer types
+           * but that would mean that we make specializations for pointer types.
+           * We could make generic wrappers around pointers and specialize for them.
+           */
+        }
+      }
+
     private:
+
+      //! Writes objectData to stream
+      /*! @param endOfObject if it's object end and we didn't save any objects we can ship */
+      void saveObjectData(bool endOfObject)
+      {
+        using namespace extendable_binary_detail;
+        if(isPointer)  {
+          PointerMarkers finalMarker = PointerMarkers::None;
+          if(objectId > 0) {
+            finalMarker |= PointerMarkers::IsSharedPtr;
+          }
+          if(polymorphicId > 0) {
+            finalMarker |= PointerMarkers::IsPolymorphicPointer;
+          }
+          if(endOfObject) {
+            finalMarker |= PointerMarkers::Empty;
+          }
+          std::uint8_t t = writeType(FieldType::pointer, static_cast<std::uint8_t>(finalMarker));
+          saveBinary<sizeof(std::uint8_t)>(&t, sizeof(std::uint8_t));
+          if(objectId > 0) {
+            saveVarint(objectId);
+          }
+          if(polymorphicId > 0) {
+            saveBinary<sizeof(std::int32_t)>(&polymorphicId, sizeof(std::int32_t));
+            // maybe simple save binary
+            // information if new
+            // information if polymorphic
+            // 0 is unused so simple negate msb and add 1 would be sufficient)
+          }
+          if(false == polymorphicName.empty()) {
+            saveVarint(polymorphicName.size());
+            saveBinary<sizeof(decltype(polymorphicName)::value_type)>( polymorphicName.c_str(),
+                polymorphicName.size() * sizeof(decltype(polymorphicName)::value_type));
+          }
+          std::cout << "saving pointer with marker:" << static_cast<int>(finalMarker) << "\n";
+        } else {
+          ClassMarkers finalMarker = ClassMarkers::None;
+          if(classVersion > 0) {
+            finalMarker |= ClassMarkers::HasVersion;
+          }
+          if(endOfObject) {
+            finalMarker |= ClassMarkers::EmptyClass;
+          }
+          std::uint8_t t = writeType(FieldType::class_t, static_cast<std::uint8_t>(finalMarker));
+          saveBinary<sizeof(std::uint8_t)>(&t, sizeof(std::uint8_t));
+          // save needed data
+          if(classVersion > 0) {
+            saveVarint(classVersion);
+          }
+        }
+        // reset variables
+        objectDataNeedsSaving = false;
+        classVersion = 0;
+        isPointer = false;
+        objectId = 0;
+        // version is only saved when method has version argument so we have to reset it
+        polymorphicId = 0;
+        polymorphicName.clear();
+      }
+
+      //! Writes last_field marker to stream
+      void saveEndMarker()
+      {
+        using namespace extendable_binary_detail;
+        std::uint8_t t = writeType(FieldType::last_field, 0);
+        saveBinary<sizeof(std::uint8_t)>(&t, sizeof(std::uint8_t));
+      }
+
+    private:
+      bool objectDataNeedsSaving = false;
+      //bool savedSomeFields = false;
+      std::uint32_t classVersion = 0;
+      bool isPointer = false;
+      std::uint32_t objectId = 0;
+      std::uint32_t polymorphicId = 0;
+      std::string polymorphicName;
+
       std::ostream & itsStream;
       const uint8_t itsConvertEndianness; //!< If set to true, we will need to swap bytes upon saving
   };
@@ -282,7 +525,7 @@ namespace cereal
       inadvertently.
 
     \ingroup Archives */
-  class ExtendableBinaryInputArchive : public InputArchive<ExtendableBinaryInputArchive, AllowEmptyClassElision>
+  class ExtendableBinaryInputArchive : public InputArchive<ExtendableBinaryInputArchive, Flags::ForwardSupport>
   {
     public:
       //! A class containing various advanced options for the ExtendableBinaryInput archive
@@ -325,7 +568,7 @@ namespace cereal
           @param options The ExtendableBinary specific options to use.  See the Options struct
                          for the values of default parameters */
       ExtendableBinaryInputArchive(std::istream & stream, Options const & options = Options::Default()) :
-        InputArchive<ExtendableBinaryInputArchive, AllowEmptyClassElision>(this),
+        InputArchive<ExtendableBinaryInputArchive, Flags::ForwardSupport>(this),
         itsStream(stream),
         itsConvertEndianness( false )
       {
@@ -368,33 +611,30 @@ namespace cereal
           throw Exception("Failed to skip " + std::to_string(size) + " bytes from input stream!");
       }
 
-      inline auto loadType() -> decltype(extendable_binary_detail::readType(std::uint8_t{})) {
-        std::uint8_t v;
-        loadBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
-        return extendable_binary_detail::readType(v);
-      }
-
-       //! Load type tag from input stream
-      /*! @tparam expected_type type which is expected to be loaded
-          Throws if type is not expected or ommited */
-      template <extendable_binary_detail::FieldType expected_type>
-      inline auto loadTypeTagSkip() -> decltype(extendable_binary_detail::readType(std::uint8_t{})) {
-        using namespace extendable_binary_detail;
-        static_assert(expected_type != FieldType::last_field, "should go to loadEndOfClass");
-        std::uint8_t v;
-        loadBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
-        auto type = extendable_binary_detail::readType(v);
-        if(type.first != expected_type && type.first != FieldType::ommited_field)
-          throw Exception("Loaded wrong type, expected: " + std::to_string(static_cast<int>(expected_type))
-                          + " got: " + std::to_string(static_cast<int>(type.first)) );
-        return type;
-      }
-      // TODO varargs
       //! Load type tag from input stream
       /*! @tparam expected_type type which is expected to be loaded
           Throws if type is not expected or ommited */
       template <extendable_binary_detail::FieldType expected_type>
-      inline auto loadTypeTagSkipNoError() -> decltype(extendable_binary_detail::readType(std::uint8_t{})) {
+      inline auto loadTypeTag() -> decltype(extendable_binary_detail::readType(std::uint8_t{}))
+      {
+        using namespace extendable_binary_detail;
+        static_assert(expected_type != FieldType::last_field, "should go to loadEndOfClass");
+        std::uint8_t v;
+        loadBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
+        auto type = extendable_binary_detail::readType(v);
+        if(type.first != expected_type && type.first != FieldType::omitted_field)
+          throw Exception("Loaded wrong type, expected: " + std::to_string(static_cast<int>(expected_type))
+                          + " got: " + std::to_string(static_cast<int>(type.first)) );
+        return type;
+      }
+
+      //! Load type tag from input stream
+      /*! @tparam expected_type type which is expected to be loaded
+          Doesn't throw exception on type different than expected_type @see loadTypeTag
+          TODO varargs, template argument is unusd now */
+      template <extendable_binary_detail::FieldType expected_type>
+      inline auto loadTypeTagNoError() -> decltype(extendable_binary_detail::readType(std::uint8_t{}))
+      {
         using namespace extendable_binary_detail;
         static_assert(expected_type != FieldType::last_field, "should go to loadEndOfClass");
         std::uint8_t v;
@@ -403,89 +643,33 @@ namespace cereal
         return type;
       }
 
-      //! Skip data until end of class is reached
-      /*! @tparam expected_type is last_field indicating after last field in class
-          Consider checking if types have expected sizes
-          Note: specialization of loadTypeSkip would be preferable but specialization of member functions without
-            specializing class is not possible */
-      inline void loadEndOfClass() {
-        using namespace extendable_binary_detail;
-        using return_type = decltype(extendable_binary_detail::readType(std::uint8_t{}));
-        std::uint8_t v;
-        return_type type;
-        int class_depth = 1; // we are in an object
-        do {
-          loadBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
-          type = readType(v);
-          switch (type.first) {
-            case FieldType::positive_integer:
-            case FieldType::negative_integer: {
-              skipData(type.second);
-              break;
-            }
-            case FieldType::floating_point: {
-              skipData(getFloatSizeFromTagSize(type.second));
-              break;
-            }
-            case FieldType::integer_packed:
-              break; // one byte
-            case FieldType::ommited_field:
-              break; // one byte
-            case FieldType::last_field: {
-              /* what we expected, but only if we didn't go into next class field */
-              --class_depth;
-              break; // one byte
-            }
-            case FieldType::class_t: {
-              ++class_depth;
-              // TODO rest of field interpretation
-              break;
-            }
-            case FieldType::packed_array: {
-              std::size_t size;
-              loadVarint(size);
-              skipData(type.second * size);
-              break;
-              // TODO fix size is saved two times
-            }
-            case FieldType::packed_struct: {
-              throw Exception("packed_struct is not supported yet");
-            }
-            default:
-              throw Exception("Unknown type of field: " + std::to_string(static_cast<int>(type.first)));
-              // delete, it's already present in readType function
-          }
-        } while ( type.first != FieldType::last_field || class_depth != 0);
-      }
-
-      //! Load varint to the stream
+      //! Load varint from the stream
       /*! Based on protobuf usage */
       template <class T>
       inline void loadVarint(T& v)
       {
         static_assert(sizeof(T) <= (extendable_binary_detail::maxVarintSize*7)/8, "value is to big to be a varint");
         static_assert(std::is_unsigned<T>::value, "only unsigned varints are supported");
-
 #if 0
         std::uint8_t first;
-        std::array<std::uint8_t, extendable_binary_detail::maxVarintSize> buffer;
-        buffer.fill(0);
-        std::size_t size = 1;
-        loadBinary<sizeof(std::uint8_t)>(&first, sizeof(std::uint8_t));
-        buffer[size - 1] = first & 0x7f;
-        while(first >= 0x80 && size < extendable_binary_detail::maxVarintSize) {
+          std::array<std::uint8_t, extendable_binary_detail::maxVarintSize> buffer;
+          buffer.fill(0);
+          std::size_t size = 1;
           loadBinary<sizeof(std::uint8_t)>(&first, sizeof(std::uint8_t));
-          buffer[size - 1] |= (first & 0x7f) << (7 * size);
-          buffer[size]     |= (first & 0x7f) >> (size);
-          ++size;
-        }
-        for(std::size_t i = sizeof(T); i <= size; i++) {
-          if(buffer[i] > 0) {
-            throw Exception("Varint is to big to be loaded" + std::to_string(size) + " dest:" + std::to_string(sizeof(v)) + " at:" + std::to_string(i));
+          buffer[size - 1] = first & 0x7f;
+          while(first >= 0x80 && size < extendable_binary_detail::maxVarintSize) {
+            loadBinary<sizeof(std::uint8_t)>(&first, sizeof(std::uint8_t));
+            buffer[size - 1] |= (first & 0x7f) << (7 * size);
+            buffer[size]     |= (first & 0x7f) >> (size);
+            ++size;
           }
-        }
-        // TODO limits
-        std::memcpy(&v, buffer.data(), sizeof(T));
+          for(std::size_t i = sizeof(T); i <= size; i++) {
+            if(buffer[i] > 0) {
+              throw Exception("Varint is to big to be loaded" + std::to_string(size) + " dest:" + std::to_string(sizeof(v)) + " at:" + std::to_string(i));
+            }
+          }
+          // TODO limits
+          std::memcpy(&v, buffer.data(), sizeof(T));
 #endif
         std::uint32_t f = 0, s = 0;
         auto load = [&]() {
@@ -559,7 +743,254 @@ namespace cereal
           std::memcpy(&v, &f, sizeof(v));
         }
       }
+
+      //! Load varint from the stream, discard input value
+      inline void skipVarint()
+      {
+        // TODO can implement faster approach, without interpreting
+        std::uint64_t ignore;
+        loadVarint(ignore);
+    }
+
+      template<class T> // only for debug
+      inline void loadObjectBeginning()
+      {
+        resetObjectDetails();
+        // TODO ommited class
+        // TODO block serialize
+        using namespace extendable_binary_detail;
+        const auto type = loadTypeTagNoError<FieldType::class_t>();
+        std::cout << "loading prologue " << typeid(T).name() << "->" << std::to_string(static_cast<int>(type.first)) << ":" << std::to_string(type.second) << "\n";
+        switch(type.first) {
+          case FieldType::class_t: {
+            loadClassData(type.second);
+            break;
+          }
+          case FieldType::pointer: {
+            loadPointerData(type.second);
+            break;
+          }
+          case FieldType::omitted_field: {
+            throw Exception("TODO ommited class");
+          }
+          default: {
+            throw Exception("Unexpected type expected class or pointer, got:" + std::to_string(static_cast<int>(type.first)));
+          }
+        }
+      }
+
+      template<class T>
+      // only for debug
+      inline void loadEndOfObjectData() {
+        if(emptyClass) {
+          // empty class or shared pointer with object which was already saved
+          std::cout << "loading epilogue (EMPTY)" << typeid(T).name() << "\n";
+        } else {
+          std::cout << "loading epilogue (NORMAL)" << typeid(T).name() << "\n";
+          loadEndOfClass();
+        }
+        resetObjectDetails();
+      }
+
+      inline std::uint32_t getLoadedClassVersion() const
+      {
+        return classVersion;
+      }
+
+      inline std::int32_t getLoadedPolymorphicId() const
+      {
+        return polymorphicId;
+      }
+
+      inline const std::string& getLoadedPolymorphicName() const
+      {
+        return polymorphicName;
+      }
+
+      inline std::uint32_t getLoadedObjectId() const
+      {
+        return objectId;
+      }
+
+      inline bool getLoadedPointerValidity() const
+      {
+        return false == emptyClass;
+      }
+
+      inline void setLastSizeTag(std::size_t size)
+      {
+        lastSizeTag = size;
+      }
+
+      inline std::size_t getLastSizeTag() const
+      {
+        return lastSizeTag;
+      }
+
     private:
+      inline void resetObjectDetails()
+      {
+        // should be reset on all fields?
+        classVersion = 0;
+        emptyClass = false; // TODO when reset?
+        objectId = 0;
+        polymorphicId = 0;
+        polymorphicName.clear();
+      }
+
+      inline void loadClassData(std::uint8_t classMarkers)
+      {
+        using namespace extendable_binary_detail;
+        ClassMarkers markers = static_cast<ClassMarkers>(classMarkers);
+        if(markers & ClassMarkers::EmptyClass) {
+          emptyClass = true;
+        }
+        if(markers & ClassMarkers::HasVersion) {
+          loadVarint(classVersion);
+        }
+      }
+
+      inline void loadPointerData(std::uint8_t pointerMarkers)
+      {
+        using namespace extendable_binary_detail;
+        PointerMarkers markers = static_cast<PointerMarkers>(pointerMarkers);
+        if (markers & PointerMarkers::Empty) {
+          emptyClass = true;
+        }
+        if (markers & PointerMarkers::IsSharedPtr) {
+          loadVarint(objectId);
+        }
+        if (markers & PointerMarkers::IsPolymorphicPointer) {
+          loadBinary<sizeof(std::int32_t)>(&polymorphicId, sizeof(std::int32_t));
+          if (polymorphicId & detail::msb_32bit) { // TODO change msb to lsb?
+            std::uint32_t nameSize;
+            loadVarint(nameSize);
+            // TODO limit max size for safety
+            polymorphicName.resize(nameSize);
+            using char_type = decltype(polymorphicName)::value_type;
+            loadBinary<sizeof(char_type)>(const_cast<char_type *>(polymorphicName.data()),
+                                          nameSize * sizeof(char_type));
+            // TODO change to uint8_t (may not match on sending side)
+            // normally it would be multiply by one, but on other platforms we could just have problems
+            // TODO const_cast doesn't seem to be best idea, we know that variable is not const but it just doesn't seem right
+            //      Similar code is used in string serialization
+            //      Do we have warranty that cow is disabled (on all platforms)?
+          }
+        }
+      }
+
+      //! Skip data until end of class is reached
+      /*! @tparam expected_type is last_field indicating after last field in class
+          Consider checking if types have expected sizes */
+      inline void loadEndOfClass()
+      {
+        using namespace extendable_binary_detail;
+        using return_type = decltype(extendable_binary_detail::readType(std::uint8_t{}));
+        std::uint8_t v;
+        return_type type;
+        int class_depth = 1; // we are in an object
+        std::size_t lastIgnoredSizeTag = 0; // TODO use other size type?
+        do {
+          loadBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
+          type = readType(v);
+          switch (type.first) {
+            case FieldType::positive_integer:
+            case FieldType::negative_integer: {
+              skipData(getIntSizeFromTagSize(type.second));
+              break;
+            }
+            case FieldType::floating_point: {
+              skipData(getFloatSizeFromTagSize(type.second));
+              break;
+            }
+            case FieldType::integer_packed:
+              break; // one byte
+            case FieldType::omitted_field:
+              break; // one byte
+            case FieldType::last_field: {
+              /* what we expected, but only if we didn't go into next class field */
+              --class_depth;
+              break; // one byte
+            }
+            case FieldType::class_t: {
+              ClassMarkers markers = static_cast<ClassMarkers>(type.second);
+              if(false == (markers & ClassMarkers::EmptyClass)) {
+                ++class_depth;
+              }
+              if(markers & ClassMarkers::HasVersion) {
+                skipVarint();
+              }
+              break;
+            }
+            case FieldType::pointer: {
+              PointerMarkers markers = static_cast<PointerMarkers>(type.second);
+              if(false == (markers & PointerMarkers::Empty)) {
+                ++class_depth;
+              }
+              if(markers & PointerMarkers::IsSharedPtr) {
+                std::uint32_t objectIdTmp;
+                loadVarint(objectIdTmp);
+                throw Exception("not implemented skipped shared ptr");
+                /* Only loading non registered shared pointer is not supported so don't throw exception here.
+                 * Only temporary */
+              }
+              if(markers & PointerMarkers::IsPolymorphicPointer) {
+                loadBinary<sizeof(std::int32_t)>(&polymorphicId, sizeof(std::int32_t));
+                if(polymorphicId & detail::msb_32bit) { // TODO change msb to lsb?
+                  std::uint32_t nameSize;
+                  loadVarint(nameSize);
+                  // TODO limit max size for safety
+                  polymorphicName.resize(nameSize);
+                  using char_type = decltype(polymorphicName)::value_type;
+                  loadBinary<sizeof(char_type)>(const_cast<char_type*>(polymorphicName.data()),
+                                                nameSize * sizeof(char_type));
+                  // TODO change to uint8_t (may not match on sending side)
+                  // normally it would be multiply by one, but on other platforms we could just have problems
+                  // TODO const_cast doesn't seem to be best idea, we know that variable is not const but it just doesn't seem right
+                  //      Similar code is used in string serialization
+                  //      Do we have warranty that cow is disabled (on all platforms)?
+                  registerPolymorphicName(polymorphicId, polymorphicName);
+                  /* Needed if polymorphic pointer's class name is saved but field is not loaded.
+                   * If polymorphic pointer of the same class is saved later class name would be unknown since class name is saved only once. */
+                }
+              }
+              break;
+            }
+            case FieldType::packed_array: {
+              std::size_t size;
+              loadVarint(size);
+              skipData(type.second * size);
+              break;
+            }
+            case FieldType::packed_struct: {
+              throw Exception("packed_struct is not supported yet");
+            }
+            case FieldType::size_tag: {
+              /* We need to load size tag because it can be needed to load BinaryData (packed_array) later */
+              const auto sizeTagSize = getIntSizeFromTagSize(type.second);
+              if(sizeTagSize > sizeof(lastIgnoredSizeTag)) {
+                throw Exception("Size tag is to big to be loaded");
+              }
+              loadBinary<sizeof(lastIgnoredSizeTag)>(&lastIgnoredSizeTag,
+                                            sizeTagSize);
+              // TODO check if endian swapping is right here
+              break;
+            }
+            default:
+              throw Exception("Unknown type of field: " + std::to_string(static_cast<int>(type.first)));
+              // delete, it's already present in readType function
+          }
+        } while ( type.first != FieldType::last_field || class_depth != 0);
+      }
+    private:
+      std::uint32_t classVersion = 0;
+      bool emptyClass = false;
+      std::uint32_t objectId = 0;
+      std::int32_t polymorphicId = 0;
+      std::string polymorphicName;
+
+      std::size_t lastSizeTag = 0;
+
       std::istream & itsStream;
       uint8_t itsConvertEndianness; //!< If set to true, we will need to swap bytes upon loading
   };
@@ -584,8 +1015,8 @@ namespace cereal
   CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, T & t)
   {
     using namespace extendable_binary_detail;
-    const auto type = ar.loadTypeTagSkip<FieldType::integer_packed>();
-    if( type.first == FieldType::ommited_field )
+    const auto type = ar.loadTypeTag<FieldType::integer_packed>();
+    if( type.first == FieldType::omitted_field )
       return;
     t = type.second;
   }
@@ -598,7 +1029,7 @@ namespace cereal
   {
     static_assert(sizeof(T) <= 32, "Only integers up to 32 bytes are supported");
     using namespace extendable_binary_detail;
-    using unsinged_type = typename std::make_unsigned<T>::type;
+    using unsigned_type = typename std::make_unsigned<T>::type;
     // can be stored in the same byte as type
     if( t < 0xf && t >= 0 ) {
       std::uint8_t v = writeType(FieldType::integer_packed, t);
@@ -606,13 +1037,13 @@ namespace cereal
     } else {
       // note that abs of minimal value for signed type may not to stored the same signed type
       // http://stackoverflow.com/questions/17313579/is-there-a-safe-way-to-get-the-unsigned-absolute-value-of-a-signed-integer-with
-      const unsinged_type absolute = t >= 0 ? t : -static_cast<unsinged_type>(t);
-      const auto highestBit = getHighestBit(absolute);
+      const unsigned_type absolute = t >= 0 ? t : -static_cast<unsigned_type>(t);
+      const auto neededBytes = getIntSizeTagFromByteCount(getHighestBit(absolute));
       const auto fieldType = t >= 0 ? FieldType::positive_integer : FieldType::negative_integer;
-      std::uint8_t v = writeType(fieldType, highestBit);
+      std::uint8_t v = writeType(fieldType, neededBytes);
       ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(v));
       // TODO fix for big endian
-      ar.saveBinary<sizeof(T)>(std::addressof(absolute), highestBit);
+      ar.saveBinary<sizeof(T)>(std::addressof(absolute), neededBytes);
     }
   }
 
@@ -623,33 +1054,35 @@ namespace cereal
   CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, T & t)
   {
     using namespace extendable_binary_detail;
-    auto type = ar.loadTypeTagSkipNoError<FieldType::integer_packed>();
+    auto type = ar.loadTypeTagNoError<FieldType::integer_packed>();
     switch(type.first) {
-      case FieldType::ommited_field:
+      case FieldType::omitted_field:
         return;
       case FieldType::integer_packed: {
         t = type.second;
         break;
       }
       case FieldType::positive_integer: {
-        if(type.second > sizeof(T)) {
+        const auto neededByteSize = getIntSizeFromTagSize(type.second);
+        if(neededByteSize > sizeof(T)) {
           throw Exception("Integer is to big to be loaded");
         }
         t = 0;
-        // TODO fix big endian, size of elem i wrong
-        ar.template loadBinary<sizeof(T)>(std::addressof(t), type.second);
+        // TODO fix big endian, size of elem may be wrong
+        ar.template loadBinary<sizeof(T)>(std::addressof(t), neededByteSize);
         break;
       }
       case FieldType::negative_integer: {
-        if(type.second > sizeof(T)) {
+        const auto neededByteSize = getIntSizeFromTagSize(type.second);
+        if(neededByteSize > sizeof(T)) {
           throw Exception("Integer is to big to be loaded");
         }
         if(std::is_unsigned<T>::value) {
           throw Exception("Negative value cannot be loaded to unsigned type");
         }
         t = 0;
-        // TODO fix big endian, size of elem is wrong
-        ar.template loadBinary<sizeof(T)>(std::addressof(t), type.second);
+        // TODO fix big endian, size of elem may be wrong
+        ar.template loadBinary<sizeof(T)>(std::addressof(t), neededByteSize);
         t = -t;
         break;
       }
@@ -694,8 +1127,8 @@ namespace cereal
                    "Extendable binary only supports IEEE 754 standardized floating point" );
     static_assert((sizeof(t) == 4) || (sizeof(t) == 8) || (sizeof(t) == 16), "unsupported float size");
     using namespace extendable_binary_detail;
-    auto type = ar.loadTypeTagSkip<FieldType::floating_point>();
-    if(type.first == FieldType::ommited_field)
+    auto type = ar.loadTypeTag<FieldType::floating_point>();
+    if(type.first == FieldType::omitted_field)
       return;
     switch(type.second) {
       case 1: {
@@ -734,12 +1167,59 @@ namespace cereal
     ar( t.value );
   }
 
-  //! Serializing SizeTags to extendable binary
-  template <class Archive, class T> inline
-  CEREAL_ARCHIVE_RESTRICT(ExtendableBinaryInputArchive, ExtendableBinaryOutputArchive)
-  CEREAL_SERIALIZE_FUNCTION_NAME( Archive & ar, SizeTag<T> & t )
+  //! Saving SizeTag to extendable binary
+  template <class T> inline
+  void CEREAL_SAVE_FUNCTION_NAME(ExtendableBinaryOutputArchive & ar, SizeTag<T> const & t)
   {
-    ar( t.size ); // TODO implement
+    using namespace extendable_binary_detail;
+    static_assert(sizeof(t.size) <= 32, "Only integers up to 32 bytes are supported");
+    if(t.size < 0) {
+      throw Exception("Negative SizeTag is not suppported");
+    }
+    const auto neededBytes = getIntSizeTagFromByteCount(getHighestBit(t.size));
+    const auto fieldType = FieldType::size_tag;
+    std::uint8_t v = writeType(fieldType, neededBytes);
+    ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(v));
+    // TODO fix for big endian
+    ar.saveBinary<sizeof(t.size)>(std::addressof(t.size), neededBytes);
+  }
+
+  //! Loading SizeTag from extendable binary
+  template <class T> inline
+  void CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, SizeTag<T> & t)
+  {
+    using namespace extendable_binary_detail;
+    auto type = ar.loadTypeTag<FieldType::size_tag>();
+    if(type.first == FieldType::omitted_field) {
+      return;
+    } else {
+      const auto neededByteSize = getIntSizeFromTagSize(type.second);
+      if(neededByteSize > sizeof(t.size)) {
+        throw Exception("Size tag integer is to big to be loaded");
+      }
+      t.size = 0;
+      // TODO fix big endian, size of elem may be wrong
+      ar.template loadBinary<sizeof(t.size)>(std::addressof(t.size), neededByteSize);
+      ar.setLastSizeTag(t.size);
+    }
+  }
+
+  //! Saving OmittedFieldTag to extendable binary
+  inline
+  void CEREAL_SAVE_FUNCTION_NAME(ExtendableBinaryOutputArchive & ar, OmittedFieldTag const &)
+  {
+    using namespace extendable_binary_detail;
+    std::uint8_t v = writeType(FieldType::omitted_field, 0);
+    ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
+    // this could be skipped if it's the last field of a class
+  }
+
+  //! Loading OmittedFieldTag from extendable binary
+  inline
+  void CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, OmittedFieldTag &)
+  {
+    using namespace extendable_binary_detail;
+    ar.loadTypeTagNoError<FieldType::omitted_field>();
   }
 
   //! Saving binary data to extendable binary
@@ -763,7 +1243,7 @@ namespace cereal
     if(sizeof(TT) >= 0xf) {
       ar.saveVarint(sizeof(TT));
     }
-    // TODO size is saved twice, once before in size tag @see types/string.hpp
+    // TODO size is saved twice for string, once before in size tag @see types/string.hpp
     ar.saveVarint(bd.size / sizeof(TT));
     ar.template saveBinary<sizeof(TT)>( bd.data, static_cast<std::size_t>( bd.size ) );
   }
@@ -777,8 +1257,8 @@ namespace cereal
                    (std::is_floating_point<TT>::value && std::numeric_limits<TT>::is_iec559),
                    "Extendable binary only supports IEEE 754 standardized floating point" );
     using namespace extendable_binary_detail;
-    const auto type = ar.loadTypeTagSkip<FieldType::packed_array>();
-    if(type.first == FieldType::ommited_field)
+    const auto type = ar.loadTypeTag<FieldType::packed_array>();
+    if(type.first == FieldType::omitted_field)
       return;
     std::uint64_t sizeOfElem;
     if(type.second == 0xf) {
@@ -798,11 +1278,108 @@ namespace cereal
     }
     ar.template loadBinary<sizeof(TT)>( bd.data, wholeSize );
   }
+
+  //! Saving VersionIdTag to extendable binary
+  template <class T> inline
+  void CEREAL_SAVE_FUNCTION_NAME(ExtendableBinaryOutputArchive & ar, detail::VersionIdTag<T> const & version)
+  {
+    ar.saveClassVersion(version.version_id);
+  }
+
+  //! Loading VersionIdTag from extendable binary
+  template <class T> inline
+  void CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, detail::VersionIdTag<T> & version)
+  {
+    version.version_id = ar.getLoadedClassVersion();
+  }
+
+  template <class T>
+  struct specialize<ExtendableBinaryOutputArchive, detail::VersionIdTag<T>, specialization::non_member_load_save> {};
+  template <class T>
+  struct specialize<ExtendableBinaryInputArchive, detail::VersionIdTag<T>, specialization::non_member_load_save> {};
+
+  //! Saving PolymorphicIdTag to extendable binary
+  template <class T> inline
+  void CEREAL_SAVE_FUNCTION_NAME(ExtendableBinaryOutputArchive & ar, detail::PolymorphicIdTag<T> const & polymorphicIdTag)
+  {
+    ar.savePolymorphicId(polymorphicIdTag.polymorphic_id);
+  }
+
+  //! Loading PolymorphicIdTag from extendable binary
+  template <class T> inline
+  void CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, detail::PolymorphicIdTag<T> & polymorphicIdTag)
+  {
+    polymorphicIdTag.polymorphic_id = ar.getLoadedPolymorphicId();
+  }
+
+  template <class T>
+  struct specialize<ExtendableBinaryOutputArchive, detail::PolymorphicIdTag<T>, specialization::non_member_load_save> {};
+  template <class T>
+  struct specialize<ExtendableBinaryInputArchive, detail::PolymorphicIdTag<T>, specialization::non_member_load_save> {};
+
+  //! Saving PolymorphicKeyTag to extendable binary
+  template <class T> inline
+  void CEREAL_SAVE_FUNCTION_NAME(ExtendableBinaryOutputArchive & ar, detail::PolymorphicKeyTag<T> const & polymorphicKeyTag)
+  {
+    ar.savePolymorphicName(polymorphicKeyTag.polymorphic_key);
+  }
+
+  //! Loading PolymorphicKeyTag from extendable binary
+  template <class T> inline
+  void CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, detail::PolymorphicKeyTag<T> & polymorphicKeyTag)
+  {
+    polymorphicKeyTag.polymorphic_key = ar.getLoadedPolymorphicName();
+  }
+
+  template <class T>
+  struct specialize<ExtendableBinaryOutputArchive, detail::PolymorphicKeyTag<T>, specialization::non_member_load_save> {};
+  template <class T>
+  struct specialize<ExtendableBinaryInputArchive, detail::PolymorphicKeyTag<T>, specialization::non_member_load_save> {};
+
+  //! Saving ObjectIdTag to extendable binary
+  template <class T> inline
+  void CEREAL_SAVE_FUNCTION_NAME(ExtendableBinaryOutputArchive & ar, detail::ObjectIdTag<T> const & objectIdTag)
+  {
+    ar.saveObjectId(objectIdTag.object_id);
+  }
+
+  //! Loading ObjectIdTag from extendable binary
+  template <class T> inline
+  void CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, detail::ObjectIdTag<T> & objectIdTag)
+  {
+    objectIdTag.object_id = ar.getLoadedObjectId();
+  }
+
+  template <class T>
+  struct specialize<ExtendableBinaryOutputArchive, detail::ObjectIdTag<T>, specialization::non_member_load_save> {};
+  template <class T>
+  struct specialize<ExtendableBinaryInputArchive, detail::ObjectIdTag<T>, specialization::non_member_load_save> {};
+
+  //! Saving PointerValidityTag to extendable binary
+  template <class T> inline
+  void CEREAL_SAVE_FUNCTION_NAME(ExtendableBinaryOutputArchive & ar, detail::PointerValidityTag<T> const & pointerValidityTag)
+  {
+    ar.savePointerValidityTag(pointerValidityTag.valid);
+  }
+
+  //! Loading PointerValidityTag from extendable binary
+  template <class T> inline
+  void CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, detail::PointerValidityTag<T> & pointerValidityTag)
+  {
+    pointerValidityTag.valid = ar.getLoadedPointerValidity();
+  }
+
+  template <class T>
+  struct specialize<ExtendableBinaryOutputArchive, detail::PointerValidityTag<T>, specialization::non_member_load_save> {};
+  template <class T>
+  struct specialize<ExtendableBinaryInputArchive, detail::PointerValidityTag<T>, specialization::non_member_load_save> {};
+
   // ######################################################################
   // ExtendableBinaryArchive prologue and epilogue functions
   // ######################################################################
 
-  //! Types which has empty prologue and epilogoue (version with one template argument
+  // ###SimpleTypes########################################################
+  //! Types which has empty prologue and epilogoue (version with one template argument)
   /*! For most of this types handling is already done in serialize function */
   template<class T>
   struct is_extendablebinary_empty_prologue_and_epilogue1 :
@@ -811,8 +1388,6 @@ namespace cereal
           std::is_same<T, std::nullptr_t>::value
       > {};
   template <class T>
-  struct is_extendablebinary_empty_prologue_and_epilogue1<NameValuePair<T>> : std::true_type {};
-  template <class T>
   struct is_extendablebinary_empty_prologue_and_epilogue1<SizeTag<T>> : std::true_type {};
   template <class T, std::size_t V>
   struct is_extendablebinary_empty_prologue_and_epilogue1<std::array<T, V>> : std::true_type {};
@@ -820,14 +1395,13 @@ namespace cereal
   struct is_extendablebinary_empty_prologue_and_epilogue1<BinaryData<T>> : std::true_type {};
   // TODO for input archive cache size, and store it specially for BinaryData
   // TODO move to traits namespace
-  // TODO change for pointers
 
-  // ######################################################################
   //! Prologue for arithmetic types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
-  void prologue( ExtendableBinaryOutputArchive &, T const & )
+  void prologue( ExtendableBinaryOutputArchive & ar, T const & )
   {
-    std::cout << "EMPTY prologue:" << typeid(T).name() << "\n";
+    ar.savingOtherField();
+    std::cout << "EMPTY (starting) prologue:" << typeid(T).name() << "\n";
   }
 
   //! Prologue for arithmetic types for ExtendableBinary archives
@@ -835,7 +1409,6 @@ namespace cereal
   void prologue( ExtendableBinaryInputArchive &, T const & )
   { }
 
-  // ######################################################################
   //! Epilogue for arithmetic types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
   void epilogue( ExtendableBinaryOutputArchive &, T const & )
@@ -846,11 +1419,57 @@ namespace cereal
   void epilogue( ExtendableBinaryInputArchive &, T const & )
   { }
 
+  // ###Internal Types#####################################################
+  //! Types which has empty internal prologue and epilogoue (version with one template argument)
+  /*! For most of this types handling is already done in serialize function
+   * Internal handing not starting new field @see savingOtherField for empty class optimalization */
+  template<class T>
+  struct is_extendablebinary_internal_prologue_and_epilogue1 : std::false_type {};
+  template <class T>
+  struct is_extendablebinary_internal_prologue_and_epilogue1<NameValuePair<T>> : std::true_type {};
+  /*! saving and loading of weak pointer calls shared_ptr serialization function which makes one more level in archive
+   *  That happends only for polymorphic types, that's why we need this strange code
+   */
+  template <class T>
+  struct is_extendablebinary_internal_prologue_and_epilogue1<std::weak_ptr<T>>
+      : std::integral_constant<bool, std::is_polymorphic<T>::value>::type {};
+// TODO change shared_ptr saving to separate function
+  template <class T>
+  struct is_extendablebinary_internal_prologue_and_epilogue1<memory_detail::PtrWrapper<T>> : std::true_type {};
+  // TODO change for pointers
+  // TODO move to traits namespace
+  template <class T>
+  struct is_extendablebinary_internal_prologue_and_epilogue1<detail::VersionIdTag<T>> : std::true_type {};
+
+  //! Prologue for internal types for ExtendableBinary archives
+  template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
+  void prologue( ExtendableBinaryOutputArchive &, T const & )
+  {
+    std::cout << "EMPTY (internal) prologue:" << typeid(T).name() << "\n";
+  }
+
+  //! Prologue for internal types for ExtendableBinary archives
+  template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
+  void prologue( ExtendableBinaryInputArchive &, T const & )
+  { }
+
+  //! Epilogue for internal types for ExtendableBinary archives
+  template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
+  void epilogue( ExtendableBinaryOutputArchive &, T const & )
+  { }
+
+  //! Epilogue for internal types for ExtendableBinary archives
+  template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
+  void epilogue( ExtendableBinaryInputArchive &, T const & )
+  { }
+
   // ####string############################################
   //! Prologue for strings for ExtendableBinary archives
   template<class CharT, class Traits, class Alloc> inline
-  void prologue(ExtendableBinaryOutputArchive &, std::basic_string<CharT, Traits, Alloc> const &)
-  { }
+  void prologue(ExtendableBinaryOutputArchive & ar, std::basic_string<CharT, Traits, Alloc> const &)
+  {
+    ar.savingOtherField();
+  }
 
   //! Prologue for strings for ExtendableBinary archives
   template<class CharT, class Traits, class Alloc> inline
@@ -867,67 +1486,52 @@ namespace cereal
   void epilogue(ExtendableBinaryInputArchive &, std::basic_string<CharT, Traits, Alloc> const &)
   { }
 
-
-  // ######################################################################
+  // ###Objects###########################################################
   //! Prologue for all other types for ExtendableBinary archives (except minimal types)
   /*! Starts a new node, named either automatically or by some NVP,
       that may be given data by the type about to be archived
 
       Minimal types do not start or finish nodes */
-  template <class T, traits::EnableIf<!std::is_arithmetic<T>::value,
-                                      !traits::has_minimal_base_class_serialization<T, traits::has_minimal_output_serialization, ExtendableBinaryOutputArchive>::value,
+  template <class T, traits::EnableIf<!traits::has_minimal_base_class_serialization<T, traits::has_minimal_output_serialization, ExtendableBinaryOutputArchive>::value,
                                       !traits::has_minimal_output_serialization<T, ExtendableBinaryOutputArchive>::value,
-                                      !is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae>
+                                      !is_extendablebinary_empty_prologue_and_epilogue1<T>::value,
+                                      !is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae>
   inline void prologue( ExtendableBinaryOutputArchive & ar, T const & )
   {
-    using namespace extendable_binary_detail;
-    std::uint8_t t = writeType(FieldType::class_t, 0);
-    ar.template saveBinary<sizeof(std::uint8_t)>(&t, sizeof(std::uint8_t));
+    ar.saveObjectBeginning();
     std::cout << "prologue:" << typeid(T).name() << "\n";
   }
 
   //! Prologue for all other types for ExtendableBinary archives
-  template <class T, traits::EnableIf<!std::is_arithmetic<T>::value,
-                                      !traits::has_minimal_base_class_serialization<T, traits::has_minimal_input_serialization, ExtendableBinaryInputArchive>::value,
+  template <class T, traits::EnableIf<!traits::has_minimal_base_class_serialization<T, traits::has_minimal_input_serialization, ExtendableBinaryInputArchive>::value,
                                       !traits::has_minimal_input_serialization<T, ExtendableBinaryInputArchive>::value,
-                                      !is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae>
+                                      !is_extendablebinary_empty_prologue_and_epilogue1<T>::value,
+                                      !is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae>
   inline void prologue( ExtendableBinaryInputArchive & ar, T const & )
   {
-    using namespace extendable_binary_detail;
-    auto type = ar.loadTypeTagSkip<FieldType::class_t>();
-    if(type.first == FieldType::ommited_field) {
-      throw Exception("TODO ommited class");
-    }
-    // TODO block serialize
-    // TODO object attributes
+    ar.loadObjectBeginning<T>();
   }
 
-  // ######################################################################
   //! Epilogue for all other types other for ExtendableBinary archives (except minimal types)
   /*! Finishes the node created in the prologue
-
       Minimal types do not start or finish nodes */
-  template <class T, traits::EnableIf<!std::is_arithmetic<T>::value,
-                                      !traits::has_minimal_base_class_serialization<T, traits::has_minimal_output_serialization, ExtendableBinaryOutputArchive>::value,
+  template <class T, traits::EnableIf<!traits::has_minimal_base_class_serialization<T, traits::has_minimal_output_serialization, ExtendableBinaryOutputArchive>::value,
                                       !traits::has_minimal_output_serialization<T, ExtendableBinaryOutputArchive>::value,
-                                      !is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae>
+                                      !is_extendablebinary_empty_prologue_and_epilogue1<T>::value,
+                                      !is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae>
   inline void epilogue( ExtendableBinaryOutputArchive & ar, T const & )
   {
-    using namespace extendable_binary_detail;
-    std::uint8_t t = writeType(FieldType::last_field, 0);
-    ar.template saveBinary<sizeof(std::uint8_t)>(&t, sizeof(std::uint8_t));
-    std::cout << "epilogue:" << typeid(T).name() << "\n";
+    ar.saveObjectEnd<T>();
   }
 
   //! Epilogue for all other types other for ExtendableBinary archives
-  template <class T, traits::EnableIf<!std::is_arithmetic<T>::value,
-                                      !traits::has_minimal_base_class_serialization<T, traits::has_minimal_input_serialization, ExtendableBinaryInputArchive>::value,
+  template <class T, traits::EnableIf<!traits::has_minimal_base_class_serialization<T, traits::has_minimal_input_serialization, ExtendableBinaryInputArchive>::value,
                                       !traits::has_minimal_input_serialization<T, ExtendableBinaryInputArchive>::value,
-                                      !is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae>
+                                      !is_extendablebinary_empty_prologue_and_epilogue1<T>::value,
+                                      !is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae>
   inline void epilogue( ExtendableBinaryInputArchive & ar, T const & )
   {
-    using namespace extendable_binary_detail;
-    ar.loadEndOfClass();
+    ar.loadEndOfObjectData<T>();
   }
 } // namespace cereal
 
@@ -937,5 +1541,17 @@ CEREAL_REGISTER_ARCHIVE(cereal::ExtendableBinaryInputArchive)
 
 // tie input and output archives together
 CEREAL_SETUP_ARCHIVE_TRAITS(cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive)
+
+namespace cereal { namespace traits {
+
+template<>
+struct wrap_polymorphic_weak_ptr<cereal::ExtendableBinaryOutputArchive> : std::false_type
+{ };
+
+template<>
+struct wrap_polymorphic_weak_ptr<cereal::ExtendableBinaryInputArchive> : std::false_type
+{ };
+
+}} // namespace cereal::traits
 
 #endif // CEREAL_ARCHIVES_EXTENDABLE_BINARY_HPP_
