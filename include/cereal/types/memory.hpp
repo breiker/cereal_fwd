@@ -264,7 +264,7 @@ namespace cereal
     auto & ptr = wrapper.ptr;
 
     uint32_t id = ar.registerSharedPointer( ptr.get() );
-    ar( CEREAL_NVP_("id", make_object_id_tag(id)) );
+    ar( CEREAL_NVP_("id", detail::make_object_id_tag(id)) );
 
     if( id & detail::msb_32bit )
     {
@@ -282,7 +282,7 @@ namespace cereal
 
     uint32_t id;
 
-    ar( CEREAL_NVP_("id", make_object_id_tag(id)) );
+    ar( CEREAL_NVP_("id", detail::make_object_id_tag(id)) );
 
     if( id & detail::msb_32bit )
     {
@@ -329,7 +329,7 @@ namespace cereal
 
     uint32_t id;
 
-    ar( CEREAL_NVP_("id", make_object_id_tag(id)) );
+    ar( CEREAL_NVP_("id", detail::make_object_id_tag(id)) );
 
     if( id & detail::msb_32bit )
     {
@@ -353,10 +353,10 @@ namespace cereal
     // 1 == not null
 
     if( !ptr )
-      ar( CEREAL_NVP_("valid", make_pointer_validity_tag(uint8_t(0))) );
+      ar( CEREAL_NVP_("valid", detail::make_pointer_validity_tag(uint8_t(0))) );
     else
     {
-      ar( CEREAL_NVP_("valid", make_pointer_validity_tag(uint8_t(1))) );
+      ar( CEREAL_NVP_("valid", detail::make_pointer_validity_tag(uint8_t(1))) );
       ar( CEREAL_NVP_("data", *ptr) );
     }
   }
@@ -368,7 +368,7 @@ namespace cereal
   CEREAL_LOAD_FUNCTION_NAME( Archive & ar, memory_detail::PtrWrapper<std::unique_ptr<T, D> &> & wrapper )
   {
     uint8_t isValid;
-    ar( CEREAL_NVP_("valid", make_pointer_validity_tag(isValid)) );
+    ar( CEREAL_NVP_("valid", detail::make_pointer_validity_tag(isValid)) );
 
     auto & ptr = wrapper.ptr;
 
@@ -402,7 +402,7 @@ namespace cereal
   CEREAL_LOAD_FUNCTION_NAME( Archive & ar, memory_detail::PtrWrapper<std::unique_ptr<T, D> &> & wrapper )
   {
     uint8_t isValid;
-    ar( CEREAL_NVP_("valid", make_pointer_validity_tag(isValid)) );
+    ar( CEREAL_NVP_("valid", detail::make_pointer_validity_tag(isValid)) );
 
     auto & ptr = wrapper.ptr;
 

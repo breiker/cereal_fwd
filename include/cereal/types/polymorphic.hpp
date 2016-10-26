@@ -206,7 +206,7 @@ namespace cereal
       std::string name;
       if(nameid & detail::msb_32bit)
       {
-        ar( CEREAL_NVP_("polymorphic_name", make_polymorphic_key_tag(name)) );
+        ar( CEREAL_NVP_("polymorphic_name", detail::make_polymorphic_key_tag(name)) );
         ar.registerPolymorphicName(nameid, name);
       }
       else
@@ -305,7 +305,7 @@ namespace cereal
     if(!ptr)
     {
       // same behavior as nullptr in memory implementation
-      ar( CEREAL_NVP_("polymorphic_id", make_polymorphic_id_tag(std::uint32_t(0))) );
+      ar( CEREAL_NVP_("polymorphic_id", detail::make_polymorphic_id_tag(std::uint32_t(0))) );
       return;
     }
 
@@ -332,7 +332,7 @@ namespace cereal
     if(!ptr)
     {
       // same behavior as nullptr in memory implementation
-      ar( CEREAL_NVP_("polymorphic_id", make_polymorphic_id_tag(std::uint32_t(0))) );
+      ar( CEREAL_NVP_("polymorphic_id", detail::make_polymorphic_id_tag(std::uint32_t(0))) );
       return;
     }
 
@@ -343,7 +343,7 @@ namespace cereal
     {
       // The 2nd msb signals that the following pointer does not need to be
       // cast with our polymorphic machinery
-      ar( CEREAL_NVP_("polymorphic_id", make_polymorphic_id_tag(detail::msb2_32bit)) );
+      ar( CEREAL_NVP_("polymorphic_id", detail::make_polymorphic_id_tag(detail::msb2_32bit)) );
 
       ar( CEREAL_NVP_("ptr_wrapper", memory_detail::make_ptr_wrapper(ptr)) );
 
@@ -365,7 +365,7 @@ namespace cereal
   CEREAL_LOAD_FUNCTION_NAME( Archive & ar, std::shared_ptr<T> & ptr )
   {
     std::uint32_t nameid;
-    ar( CEREAL_NVP_("polymorphic_id", make_polymorphic_id_tag(nameid)) );
+    ar( CEREAL_NVP_("polymorphic_id", detail::make_polymorphic_id_tag(nameid)) );
 
     // Check to see if we can skip all of this polymorphism business
     if(polymorphic_detail::serialize_wrapper(ar, ptr, nameid))
@@ -404,7 +404,7 @@ namespace cereal
     if(!ptr)
     {
       // same behavior as nullptr in memory implementation
-      ar( CEREAL_NVP_("polymorphic_id", std::uint32_t(0)) );
+      ar( CEREAL_NVP_("polymorphic_id", detail::make_polymorphic_id_tag(std::uint32_t(0))) );
       return;
     }
 
@@ -431,7 +431,7 @@ namespace cereal
     if(!ptr)
     {
       // same behavior as nullptr in memory implementation
-      ar( CEREAL_NVP_("polymorphic_id", std::uint32_t(0)) );
+      ar( CEREAL_NVP_("polymorphic_id", detail::make_polymorphic_id_tag(std::uint32_t(0))) );
       return;
     }
 
@@ -442,7 +442,7 @@ namespace cereal
     {
       // The 2nd msb signals that the following pointer does not need to be
       // cast with our polymorphic machinery
-      ar( CEREAL_NVP_("polymorphic_id", detail::msb2_32bit) );
+      ar( CEREAL_NVP_("polymorphic_id", detail::make_polymorphic_id_tag(detail::msb2_32bit)) );
 
       ar( CEREAL_NVP_("ptr_wrapper", memory_detail::make_ptr_wrapper(ptr)) );
 
@@ -464,7 +464,7 @@ namespace cereal
   CEREAL_LOAD_FUNCTION_NAME( Archive & ar, std::unique_ptr<T, D> & ptr )
   {
     std::uint32_t nameid;
-    ar( CEREAL_NVP_("polymorphic_id", nameid) );
+    ar( CEREAL_NVP_("polymorphic_id", detail::make_polymorphic_id_tag(nameid)) );
 
     // Check to see if we can skip all of this polymorphism business
     if(polymorphic_detail::serialize_wrapper(ar, ptr, nameid))

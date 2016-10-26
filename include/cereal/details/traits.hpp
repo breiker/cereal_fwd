@@ -1303,6 +1303,15 @@ namespace cereal
     struct is_text_archive : std::integral_constant<bool,
       std::is_base_of<TextArchive, detail::decay_archive<A>>::value>
     { };
+
+    //! Wrap polymorphic weak_ptr in shared_ptr
+    /*! Makes one more level of indirection during save and load of weak_ptr
+     * It's inconsistent with non-polymorphic weak_ptr which is directly saved into PtrWrapper.
+     * True is default for compatibility reasons.
+     */
+    template<class A>
+    struct wrap_polymorphic_weak_ptr : std::true_type
+    { };
   } // namespace traits
 
   // ######################################################################

@@ -127,8 +127,16 @@ namespace cereal
         ensure that your classes that have custom serialization are correct
         by using the traits is_output_serializable and is_input_serializable
         in cereal/details/traits.hpp.
+      ForwardSupport
+        This saves class version for every object. Even if version was alredy saved
+        for same class. It's needed if first time field with version is not read
+        and later for the same type we don't have a way to get it since version
+        was saved only once. @see registerClassVersionImpl
       @ingroup Internal */
-  enum Flags { AllowEmptyClassElision = 1 };
+  enum Flags {
+    AllowEmptyClassElision = 1,
+    ForwardSupport = 2
+  };
 
   // ######################################################################
   //! Registers a specific Archive type with cereal
@@ -476,8 +484,8 @@ namespace cereal
 
           @tparam T The type of the class being serialized
           @param version The version number associated with it */
-      template <class T> inline
-      std::uint32_t registerClassVersion()
+      template <class T> inline typename
+      std::uint32_t registerClassVersionImpl(std::false_type)
       {
         static const auto hash = std::type_index(typeid(T)).hash_code();
         const auto insertResult = itsVersionedTypes.insert( hash );
@@ -486,9 +494,35 @@ namespace cereal
           detail::StaticObject<detail::Versions>::getInstance().find( hash, detail::Version<T>::version );
 
         if( insertResult.second ) // insertion took place, serialize the version number
-          process( make_nvp<ArchiveType>("cereal_class_version", version) );
+          process( make_nvp<ArchiveType>("cereal_class_version", detail::VersionIdTag<T>(version)) );
 
         return version;
+      }
+
+      //! Registers a class version with the archive and serializes it
+      /*! VersionTag is always passed to archive.
+          If older version is reading archive some fields can be be skipped and not read.
+          If field which had class version written is not loaded we may not know type of saved class.
+          If same class is later loaded in other field and version id would be saved only once we would loose
+          class version information.
+
+          Type is passed to make optimalizations in archive imlplementation possible. Eg. polymorphic pointers
+          already save class id so version id can be saved only once per class id.
+
+          @tparam T The type of the class being serialized
+          @param version The version number associated with it */
+      template <class T> inline typename
+      std::uint32_t registerClassVersionImpl(std::true_type)
+      {
+        const auto version = detail::Version<T>::version;
+        process( make_nvp<ArchiveType>("cereal_class_version", detail::VersionIdTag<T>(version)) );
+        return version;
+      }
+
+      template <class T> inline
+      std::uint32_t registerClassVersion()
+      {
+        return registerClassVersionImpl<T>(std::integral_constant<bool, ((Flags & Flags::ForwardSupport) > 0)>());
       }
 
       //! Member serialization
@@ -861,7 +895,7 @@ namespace cereal
           @tparam T The type of the class being serialized
           @param version The version number associated with it */
       template <class T> inline
-      std::uint32_t loadClassVersion()
+      std::uint32_t loadClassVersionImpl(std::false_type)
       {
         static const auto hash = std::type_index(typeid(T)).hash_code();
         auto lookupResult = itsVersionedTypes.find( hash );
@@ -870,13 +904,27 @@ namespace cereal
           return lookupResult->second;
         else // need to load
         {
-          std::uint32_t version;
+          detail::VersionIdTag<T> version;
 
           process( make_nvp<ArchiveType>("cereal_class_version", version) );
-          itsVersionedTypes.emplace_hint( lookupResult, hash, version );
+          itsVersionedTypes.emplace_hint( lookupResult, hash, version.version_id );
 
-          return version;
+          return version.version_id;
         }
+      }
+
+      template <class T> inline
+      std::uint32_t loadClassVersionImpl(std::true_type)
+      {
+        detail::VersionIdTag<T> version;
+        process( make_nvp<ArchiveType>("cereal_class_version", version ) );
+        return version.version_id;
+      }
+
+      template <class T> inline
+      std::uint32_t loadClassVersion()
+      {
+        return loadClassVersionImpl<T>(std::integral_constant<bool, ((Flags & Flags::ForwardSupport) > 0)>());
       }
 
       //! Member serialization

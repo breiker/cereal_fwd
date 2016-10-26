@@ -292,170 +292,6 @@ namespace cereal
   class OmittedFieldTag
   { };
 
-  //! A wrapper around polymorphic id
-  /*! This class provides a way for custom handing of polymorphic id in archives
-      @internal */
-  template <class T>
-  class PolymorphicIdTag
-  {
-    private:
-      // Store a reference if passed an lvalue reference, otherwise
-      // make a copy of the data
-      using Type = typename std::conditional<std::is_lvalue_reference<T>::value,
-                                             T,
-                                             typename std::decay<T>::type>::type;
-      using SimpleType = typename std::decay<T>::type;
-
-      PolymorphicIdTag & operator=( PolymorphicIdTag const & ) = delete;
-
-    public:
-      PolymorphicIdTag( T && polymorphic_id_ ) : polymorphic_id(std::forward<T>(polymorphic_id_)) {}
-
-      Type polymorphic_id;
-
-      template<class Archive>
-      SimpleType save_minimal(Archive const &) const
-      {
-        return polymorphic_id;
-      }
-
-      template<class Archive>
-      void load_minimal(Archive const &, SimpleType const &v)
-      {
-        polymorphic_id = v;
-      }
-  };
-
-  template <class T> inline
-  PolymorphicIdTag<T> make_polymorphic_id_tag( T && polymorphic_id )
-  {
-    return {std::forward<T>(polymorphic_id)};
-  }
-
-  //! A wrapper around polymorphic key
-  /*! This class provides a way for custom handing of polymorphic key in archives
-   *  Only string key is supported for now.
-   *  TODO add support for uint key
-      @internal */
-  template <class T>
-  class PolymorphicKeyTag
-  {
-    private:
-      // Store a reference if passed an lvalue reference, otherwise
-      // make a copy of the data
-      using Type = typename std::conditional<std::is_lvalue_reference<T>::value,
-                                             T,
-                                             typename std::decay<T>::type>::type;
-      using SimpleType = typename std::decay<T>::type;
-
-      PolymorphicKeyTag & operator=( PolymorphicKeyTag const & ) = delete;
-
-    public:
-      PolymorphicKeyTag( T && polymorphic_key_ ) : polymorphic_key(std::forward<T>(polymorphic_key_)) {}
-
-      Type polymorphic_key;
-
-      template <class Archive>
-      SimpleType save_minimal( Archive const & ) const
-      {
-        return polymorphic_key;
-      }
-
-      template <class Archive>
-      void load_minimal( Archive const &, SimpleType const & v )
-      {
-        polymorphic_key = v;
-      }
-  };
-
-  template <class T> inline
-  PolymorphicKeyTag<T> make_polymorphic_key_tag( T && polymorphic_key )
-  {
-    return {std::forward<T>(polymorphic_key)};
-  }
-
-  //! A wrapper around object id.
-  /*! This class provides a way for custom handing of object id in archives.
-   *  Object id is used to track objects shared between many instances of shared_ptrs.
-      @internal */
-  template <class T>
-  class ObjectIdTag
-  {
-    private:
-      // Store a reference if passed an lvalue reference, otherwise
-      // make a copy of the data
-      using Type = typename std::conditional<std::is_lvalue_reference<T>::value,
-          T,
-          typename std::decay<T>::type>::type;
-      using SimpleType = typename std::decay<T>::type;
-
-    ObjectIdTag & operator=( ObjectIdTag const & ) = delete;
-
-    public:
-      ObjectIdTag( T && object_id_ ) : object_id(std::forward<T>(object_id_)) {}
-
-      Type object_id;
-
-      template <class Archive>
-      SimpleType save_minimal( Archive const & ) const
-      {
-        return object_id;
-      }
-
-      template <class Archive>
-      void load_minimal( Archive const &, SimpleType const & v )
-      {
-        object_id = v;
-      }
-  };
-
-  template <class T> inline
-  ObjectIdTag<T> make_object_id_tag( T && object_id )
-  {
-    return {std::forward<T>(object_id)};
-  }
-
-  //! A wrapper around pointer validity marker.
-  /*! This class provides a way for custom handing of pointer validity handling.
-   *  Validity is used to mark if unique_ptr was not null.
-      @internal */
-  template<class T>
-  class PointerValidityTag
-  {
-    private:
-      // Store a reference if passed an lvalue reference, otherwise
-      // make a copy of the data
-      using Type = typename std::conditional<std::is_lvalue_reference<T>::value,
-          T,
-          typename std::decay<T>::type>::type;
-      using SimpleType = typename std::decay<T>::type;
-
-      PointerValidityTag & operator=( PointerValidityTag const & ) = delete;
-
-    public:
-      PointerValidityTag( T && valid_ ) : valid(std::forward<T>(valid_)) {};
-
-      Type valid;
-
-      template <class Archive>
-      SimpleType save_minimal( Archive const & ) const
-      {
-        return valid;
-      }
-
-      template <class Archive>
-      void load_minimal( Archive const &, SimpleType const & v )
-      {
-        valid = v;
-      }
-  };
-
-  template <class T> inline
-  PointerValidityTag<T> make_pointer_validity_tag( T && valid )
-  {
-    return {std::forward<T>(valid)};
-  }
-
   // ######################################################################
   //! A wrapper around a key and value for serializing data into maps.
   /*! This class just provides a grouping of keys and values into a struct for
@@ -516,6 +352,212 @@ namespace cereal
   {
     return {std::forward<KeyType>(key), std::forward<ValueType>(value)};
   }
+
+  namespace detail
+  {
+    //! A wrapper around polymorphic id
+    /*! This class provides a way for custom handing of polymorphic id in archives
+        @internal */
+    template<class T>
+    class VersionIdTag
+    {
+      public:
+        VersionIdTag()
+        {}
+
+        VersionIdTag(std::uint32_t version_id_) : version_id(version_id_)
+        {}
+
+        VersionIdTag &operator=(VersionIdTag const &) = delete;
+
+        template<class Archive>
+        std::uint32_t save_minimal(Archive const &) const
+        {
+          return version_id;
+        }
+
+        template<class Archive>
+        void load_minimal(Archive const &, std::uint32_t const &v)
+        {
+          version_id = v;
+        }
+
+        std::uint32_t version_id;
+    };
+
+    //! A wrapper around polymorphic id
+    /*! This class provides a way for custom handing of polymorphic id in archives
+        @internal */
+    template<class T>
+    class PolymorphicIdTag
+    {
+      private:
+        // Store a reference if passed an lvalue reference, otherwise
+        // make a copy of the data
+        using Type = typename std::conditional<std::is_lvalue_reference<T>::value,
+            T,
+            typename std::decay<T>::type>::type;
+        using SimpleType = typename std::decay<T>::type;
+
+        PolymorphicIdTag &operator=(PolymorphicIdTag const &) = delete;
+
+      public:
+        PolymorphicIdTag(T &&polymorphic_id_) : polymorphic_id(std::forward<T>(polymorphic_id_))
+        {}
+
+        Type polymorphic_id;
+
+        template<class Archive>
+        SimpleType save_minimal(Archive const &) const
+        {
+          return polymorphic_id;
+        }
+
+        template<class Archive>
+        void load_minimal(Archive const &, SimpleType const &v)
+        {
+          polymorphic_id = v;
+        }
+    };
+
+    template<class T>
+    inline
+    PolymorphicIdTag<T> make_polymorphic_id_tag(T &&polymorphic_id)
+    {
+      return {std::forward<T>(polymorphic_id)};
+    }
+
+    //! A wrapper around polymorphic key
+    /*! This class provides a way for custom handing of polymorphic key in archives
+     *  Only string key is supported for now.
+        @internal */
+    template<class T>
+    class PolymorphicKeyTag
+    {
+      private:
+        // Store a reference if passed an lvalue reference, otherwise
+        // make a copy of the data
+        using Type = typename std::conditional<std::is_lvalue_reference<T>::value,
+            T,
+            typename std::decay<T>::type>::type;
+        using SimpleType = typename std::decay<T>::type;
+
+        PolymorphicKeyTag &operator=(PolymorphicKeyTag const &) = delete;
+
+      public:
+        PolymorphicKeyTag(T &&polymorphic_key_) : polymorphic_key(std::forward<T>(polymorphic_key_))
+        {}
+
+        Type polymorphic_key;
+
+        template<class Archive>
+        SimpleType save_minimal(Archive const &) const
+        {
+          return polymorphic_key;
+        }
+
+        template<class Archive>
+        void load_minimal(Archive const &, SimpleType const &v)
+        {
+          polymorphic_key = v;
+        }
+    };
+
+    template<class T>
+    inline
+    PolymorphicKeyTag<T> make_polymorphic_key_tag(T &&polymorphic_key)
+    {
+      return {std::forward<T>(polymorphic_key)};
+    }
+
+    //! A wrapper around object id.
+    /*! This class provides a way for custom handing of object id in archives.
+     *  Object id is used to track objects shared between many instances of shared_ptrs.
+        @internal */
+    template<class T>
+    class ObjectIdTag
+    {
+      private:
+        // Store a reference if passed an lvalue reference, otherwise
+        // make a copy of the data
+        using Type = typename std::conditional<std::is_lvalue_reference<T>::value,
+            T,
+            typename std::decay<T>::type>::type;
+        using SimpleType = typename std::decay<T>::type;
+
+        ObjectIdTag &operator=(ObjectIdTag const &) = delete;
+
+      public:
+        ObjectIdTag(T &&object_id_) : object_id(std::forward<T>(object_id_))
+        {}
+
+        Type object_id;
+
+        template<class Archive>
+        SimpleType save_minimal(Archive const &) const
+        {
+          return object_id;
+        }
+
+        template<class Archive>
+        void load_minimal(Archive const &, SimpleType const &v)
+        {
+          object_id = v;
+        }
+    };
+
+    template<class T>
+    inline
+    ObjectIdTag<T> make_object_id_tag(T &&object_id)
+    {
+      return {std::forward<T>(object_id)};
+    }
+
+    //! A wrapper around pointer validity marker.
+    /*! This class provides a way for custom handing of pointer validity handling.
+     *  Validity is used to mark if unique_ptr was not null.
+        @internal */
+    template<class T>
+    class PointerValidityTag
+    {
+      private:
+        // Store a reference if passed an lvalue reference, otherwise
+        // make a copy of the data
+        using Type = typename std::conditional<std::is_lvalue_reference<T>::value,
+            T,
+            typename std::decay<T>::type>::type;
+        using SimpleType = typename std::decay<T>::type;
+
+        PointerValidityTag &operator=(PointerValidityTag const &) = delete;
+
+      public:
+        PointerValidityTag(T &&valid_) : valid(std::forward<T>(valid_))
+        {};
+
+        Type valid;
+
+        template<class Archive>
+        SimpleType save_minimal(Archive const &) const
+        {
+          return valid;
+        }
+
+        template<class Archive>
+        void load_minimal(Archive const &, SimpleType const &v)
+        {
+          valid = v;
+        }
+    };
+
+    template<class T>
+    inline
+    PointerValidityTag<T> make_pointer_validity_tag(T &&valid)
+    {
+      return {std::forward<T>(valid)};
+    }
+
+  } // namespace detail
+
 
   namespace detail
   {
