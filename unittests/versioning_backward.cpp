@@ -36,6 +36,32 @@
 #include "common.hpp"
 #include <boost/test/unit_test.hpp>
 
+struct SkippedStruct : public StructBase {
+  SkippedStruct(int xx, int yy) : StructBase(xx, yy) {}
+
+  template<class Archive>
+  void serialize(Archive& ar)
+  {
+    ar(x, y);
+  }
+};
+
+template<class T> inline
+typename std::enable_if<std::is_same<T, SkippedStruct>::value, T>::type
+random_value(std::mt19937 & gen)
+{ return { random_value<int>(gen), random_value<int>(gen) }; }
+
+
+struct SkippedEmptyStruct {
+  template<class Archive>
+  void serialize(Archive&)
+  { }
+};
+
+template<class T> inline
+typename std::enable_if<std::is_same<T, SkippedEmptyStruct>::value, T>::type
+random_value(std::mt19937 &)
+{ return T(); }
 
 template<class T>
 struct StructBaseT
@@ -292,6 +318,8 @@ BOOST_AUTO_TEST_CASE( extendable_binary_forward_support_extended )
 
   test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, std::string>();
   test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, std::array<std::uint16_t, 4>>();
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, SkippedStruct>();
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, SkippedEmptyStruct>();
 }
 
 BOOST_AUTO_TEST_CASE( portable_binary_forward_support_extended )
@@ -315,5 +343,7 @@ CEREAL_CLASS_VERSION( InnerNew<std::uint8_t>, 1 )
 CEREAL_CLASS_VERSION( InnerNew<std::uint16_t>, 1 )
 CEREAL_CLASS_VERSION( InnerNew<std::uint64_t>, 1 )
 CEREAL_CLASS_VERSION( InnerNew<std::string>, 1 )
-CEREAL_CLASS_VERSION( InnerNew< std::array<std::uint16_t CEREAL_MACRO_COMMA 4> >, 1 )
+CEREAL_CLASS_VERSION( InnerNew<std::array<std::uint16_t CEREAL_MACRO_COMMA 4>>, 1 )
+CEREAL_CLASS_VERSION( InnerNew<SkippedStruct>, 1 )
+CEREAL_CLASS_VERSION( InnerNew<SkippedEmptyStruct>, 1 )
 #undef CEREAL_MACRO_COMMA
