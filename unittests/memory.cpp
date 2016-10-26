@@ -99,6 +99,11 @@ BOOST_AUTO_TEST_CASE( json_memory )
   test_memory<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+BOOST_AUTO_TEST_CASE( extendable_binary_memory )
+{
+  test_memory<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
+
 class TestClass
 {
   public:
