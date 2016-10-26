@@ -773,8 +773,8 @@ namespace cereal
   { }
 
   // ######################################################################
-  //! Prologue for OmmitedFieldTag for JSON output archives
-  /*! OmmitedFieldTag do not start or finish nodes */
+  //! Prologue for OmittedFieldTag for JSON output archives
+  /*! OmittedFieldTag do not start or finish nodes */
   inline
   void prologue( JSONOutputArchive &, OmittedFieldTag const & )
   { }
@@ -783,7 +783,7 @@ namespace cereal
   void prologue( JSONInputArchive &, OmittedFieldTag const & )
   { }
 
-  //! Epilogue for OmmitedFieldtag for JSON output archives
+  //! Epilogue for OmittedFieldTag for JSON output archives
   /*! OmitedFieldtag do not start or finish nodes */
   template <class T> inline
   void epilogue( JSONOutputArchive &, OmittedFieldTag const & )
@@ -985,7 +985,7 @@ namespace cereal
     ar.loadSize( st.size );
   }
 
-  //! Serializing OmmitedFieldTag to binary
+  //! Serializing OmittedFieldTag to binary
   /*! Ommiting field in json archive is noop */
   template <class Archive> inline
   CEREAL_ARCHIVE_RESTRICT(JSONInputArchive, JSONOutputArchive)

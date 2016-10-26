@@ -157,7 +157,7 @@ namespace cereal
   {
     ar.loadBinary(bd.data, static_cast<std::size_t>(bd.size));
   }
-   //! Serializing OmmitedFieldTag to binary
+   //! Serializing OmittedFieldTag to binary
   /*! Ommiting field in binary archive is supported only if other side is also ommiting this field */
   template <class Archive> inline
   CEREAL_ARCHIVE_RESTRICT(BinaryInputArchive, BinaryOutputArchive)

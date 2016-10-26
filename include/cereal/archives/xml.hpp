@@ -782,8 +782,8 @@ namespace cereal
   { }
 
   // ######################################################################
-  //! Prologue for OmmitedFieldTag for XML output archives
-  /*! OmmitedFieldTag do not start or finish nodes */
+  //! Prologue for OmittedFieldTag for XML output archives
+  /*! OmittedFieldTag do not start or finish nodes */
   inline
   void prologue( XMLOutputArchive &, OmittedFieldTag const & )
   { }
@@ -792,7 +792,7 @@ namespace cereal
   void prologue( XMLInputArchive &, OmittedFieldTag const & )
   { }
 
-  //! Epilogue for OmmitedFieldtag for XML output archives
+  //! Epilogue for OmittedFieldTag for XML output archives
   /*! OmitedFieldtag do not start or finish nodes */
   template <class T> inline
   void epilogue( XMLOutputArchive &, OmittedFieldTag const & )
@@ -906,7 +906,7 @@ namespace cereal
     ar.loadValue( str );
   }
 
-  //! Serializing OmmitedFieldTag to binary
+  //! Serializing OmittedFieldTag to binary
   /*! Ommiting field in xml archive is noop */
   template <class Archive> inline
   CEREAL_ARCHIVE_RESTRICT(XMLInputArchive, XMLOutputArchive)
