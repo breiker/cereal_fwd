@@ -254,6 +254,145 @@ namespace cereal
         throw Exception("Unsupported int size");
       }
     }
+
+    struct StreamPos
+    {
+      std::streamoff start;
+      std::streamoff end;
+    };
+
+    class StreamAdapter
+    {
+      public:
+        StreamAdapter(std::istream & stream, std::stringstream & sharedObjectStream)
+            : nowReading(nullptr), bytesLeft(0), mainStream(stream), backStream(sharedObjectStream)
+        {}
+
+        //! Pushes new reading position on the stream
+        /*! @param streamPos new reading pos, saves reference which has to be valid for whole object lifetime
+            Throws if not enough bytes are read */
+        void pushReadingPos(StreamPos & streamPos)
+        {
+          if (nowReading == nullptr) {
+            // save backStream pos for restoration
+            endOfWritingStream = backStream.tellg();
+          } else {
+            // save current position when we get back to this level
+            backStreams.push(std::make_pair(backStream.tellg(), &streamPos));
+          }
+          backStream.seekg(streamPos.start);
+          nowReading = &streamPos;
+          bytesLeft = streamPos.end - streamPos.start;
+        }
+
+        //! Reads binary data from stream which is on top
+        /*! @param data address to read to
+            @param size size of data to read
+            Size has to be less or equal to data available curren stream position. That is:
+            - If using streamPos on queue - end of current streamPos
+            - If using mainStream - end of mainStream
+            Throws if not enough bytes are read. */
+        inline std::size_t readBinary(void *const data, std::size_t size)
+        {
+          std::size_t readSize;
+          if (nowReading == nullptr) {
+            readSize = static_cast<std::size_t>( mainStream.rdbuf()->sgetn(reinterpret_cast<char *>( data ), size));
+          } else {
+            if (size > bytesLeft) {
+              throw Exception("went to far reading skipped shared object stream");
+            }
+            readSize = static_cast<std::size_t>( backStream.rdbuf()->sgetn(reinterpret_cast<char *>( data ), size));
+            bytesLeft -= readSize;
+            if (0 == bytesLeft) {
+              popStream();
+            }
+          }
+          return readSize;
+        }
+
+        //! Discards size bytes from the input stream
+        /*! @param size The number of bytes in the data
+            Throws if not enough bytes are read */
+        inline void skipData(std::size_t size)
+        {
+          bool streamError;
+          if (nowReading == nullptr) {
+            mainStream.ignore(size);
+            streamError = !mainStream; // we don't care about eof here
+          } else {
+            if (size > bytesLeft) {
+              throw Exception("went to far reading skipped shared object stream");
+            }
+            backStream.ignore(size);
+            streamError = !backStream; // we don't care about eof here
+            bytesLeft -= size;
+            if (0 == bytesLeft) {
+              popStream();
+            }
+          }
+          if (streamError)
+            throw Exception("Failed to skip " + std::to_string(size) + " bytes from input stream!");
+        }
+
+        //! Reads size bytes from the input stream and copies them to other stream
+        /*! @param size The number of bytes to read and copy
+            @param
+            Throws if not enough bytes are read */
+        inline void readToOtherStream(std::size_t size, std::ostream & stream)
+        {
+          auto copyN = [](std::istream & from, std::size_t sizeToCopy, std::ostream & to) {
+            auto start = std::istreambuf_iterator<char>(from);
+            auto end = std::istreambuf_iterator<char>();
+            auto dest = std::ostreambuf_iterator<char>(to);
+            for (; sizeToCopy > 0 && start != end; ++start, ++dest, --sizeToCopy) {
+              *dest = *start;
+            }
+            if (0 != sizeToCopy)
+              throw Exception("Failed to skip data from input stream!");
+          };
+
+          if (nowReading == nullptr) {
+            copyN(mainStream, size, stream);
+          } else {
+            assert(false); // shouldn't be here
+            if (size > bytesLeft) {
+              throw Exception("went to far reading skipped shared object stream");
+            }
+            copyN(mainStream, size, stream);
+            bytesLeft -= size;
+            if (0 == bytesLeft) {
+              popStream();
+            }
+          }
+        }
+
+      private:
+        void popStream()
+        {
+          if (backStreams.empty()) {
+            // move backStream back where it was for writing
+            backStream.seekg(endOfWritingStream);
+            nowReading = nullptr;
+            bytesLeft = 0;
+          } else {
+            const auto & next = backStreams.back();
+            backStream.seekg(next.first);
+            // we read something before so next.first has to be used
+            bytesLeft = next.second->end - next.first;
+            nowReading = next.second;
+            backStreams.pop();
+          }
+        }
+
+      private:
+        StreamPos *nowReading;
+        std::size_t bytesLeft;
+        //! end of writing backStream, will be restored when reading from other position is done
+        std::size_t endOfWritingStream;
+        std::queue<std::pair<std::size_t, StreamPos *>> backStreams;
+        std::istream & mainStream;
+        std::istream & backStream;
+    };
   } // namespace extendable_binary_detail
 } // namespace cereal
 #endif

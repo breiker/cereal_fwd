@@ -1,4 +1,4 @@
-/*! \file omit_pointers.hpp
+/*! \file versioning_omit_pointers.hpp
     \brief Check if omit is working with derived class registration
     \ingroup tests */
 /*
