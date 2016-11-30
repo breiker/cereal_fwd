@@ -544,7 +544,8 @@ namespace cereal
       template <class T> inline
       std::uint32_t registerClassVersion()
       {
-        return registerClassVersionImpl<T>(std::integral_constant<bool, ((Flags & Flags::ForwardSupport) > 0)>());
+        using IsForwardSupport = std::integral_constant<bool, ((Flags & ForwardSupport) > 0)>;
+        return registerClassVersionImpl<T>(IsForwardSupport());
       }
 
       //! Member serialization
@@ -789,7 +790,7 @@ namespace cereal
       template <class T> inline
       void process( T && head )
       {
-        using IsForwardSupport = std::integral_constant<bool, ((Flags & Flags::ForwardSupport) > 0)>;
+        using IsForwardSupport = std::integral_constant<bool, ((Flags & ForwardSupport) > 0)>;
         processPrologue( IsForwardSupport(), std::forward<T>( head ) );
       }
 
@@ -969,7 +970,7 @@ namespace cereal
       template <class T> inline
       std::uint32_t loadClassVersion()
       {
-        return loadClassVersionImpl<T>(std::integral_constant<bool, ((Flags & Flags::ForwardSupport) > 0)>());
+        return loadClassVersionImpl<T>(std::integral_constant<bool, ((Flags & ForwardSupport) > 0)>());
       }
 
       //! Member serialization
