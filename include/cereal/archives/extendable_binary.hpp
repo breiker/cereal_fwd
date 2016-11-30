@@ -387,41 +387,44 @@ namespace cereal
       inline void skipData( std::size_t size )
       {
         itsStream.ignore( size );
-        // TODO consider switching to seekg, not sure if supported for all streams
         if(itsStream.bad())
           throw Exception("Failed to skip " + std::to_string(size) + " bytes from input stream!");
       }
 
       //! Load type tag from input stream
+      /*! @return if type is not ommited_field */
+      inline bool loadTypeTag()
+      {
+        using namespace extendable_binary_detail;
+        std::uint8_t v;
+        loadBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
+        lastTypeTag = extendable_binary_detail::readType(v);
+        return lastTypeTag.first != FieldType::omitted_field;
+      }
+      //! Gets last type tag from input stream
       /*! @tparam expected_type type which is expected to be loaded
-          Throws if type is not expected or ommited */
+          Throws if type is not expected or omitted */
       template <extendable_binary_detail::FieldType expected_type>
-      inline auto loadTypeTag() -> decltype(extendable_binary_detail::readType(std::uint8_t{}))
+      inline auto getTypeTag() -> decltype(extendable_binary_detail::readType(std::uint8_t{}))
       {
         using namespace extendable_binary_detail;
         static_assert(expected_type != FieldType::last_field, "should go to loadEndOfClass");
-        std::uint8_t v;
-        loadBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
-        auto type = extendable_binary_detail::readType(v);
-        if(type.first != expected_type && type.first != FieldType::omitted_field)
-          throw Exception("Loaded wrong type, expected: " + std::to_string(static_cast<int>(expected_type))
-                          + " got: " + std::to_string(static_cast<int>(type.first)) );
-        return type;
+        if(lastTypeTag.first != expected_type && lastTypeTag.first != FieldType::omitted_field)
+          throw Exception("Loaded wrong lastTypeTag, expected: " + std::to_string(static_cast<int>(expected_type))
+                          + " got: " + std::to_string(static_cast<int>(lastTypeTag.first)) );
+        return lastTypeTag;
       }
 
-      //! Load type tag from input stream
+      //! Gets last type tag from input stream
       /*! @tparam expected_type type which is expected to be loaded
-          Doesn't throw exception on type different than expected_type @see loadTypeTag
+          Doesn't throw exception on type different than expected_type @see getTypeTag
           TODO varargs, template argument is unusd now */
       template <extendable_binary_detail::FieldType expected_type>
-      inline auto loadTypeTagNoError() -> decltype(extendable_binary_detail::readType(std::uint8_t{}))
+      inline auto getTypeTagNoError() -> decltype(extendable_binary_detail::readType(std::uint8_t{}))
       {
         using namespace extendable_binary_detail;
         static_assert(expected_type != FieldType::last_field, "should go to loadEndOfClass");
-        std::uint8_t v;
-        loadBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
-        auto type = extendable_binary_detail::readType(v);
-        return type;
+        return lastTypeTag;
       }
 
       //! Load varint from the stream
@@ -537,10 +540,10 @@ namespace cereal
       inline void loadObjectBeginning()
       {
         resetObjectDetails();
-        // TODO ommited class
+        // TODO omitted class
         // TODO block serialize
         using namespace extendable_binary_detail;
-        const auto type = loadTypeTagNoError<FieldType::class_t>();
+        const auto type = getTypeTagNoError<FieldType::class_t>();
         std::cout << "loading prologue " << typeid(T).name() << "->" << std::to_string(static_cast<int>(type.first)) << ":" << std::to_string(type.second) << "\n";
         switch(type.first) {
           case FieldType::class_t: {
@@ -552,7 +555,7 @@ namespace cereal
             break;
           }
           case FieldType::omitted_field: {
-            throw Exception("TODO ommited class");
+            throw Exception("TODO omitted class");
           }
           default: {
             throw Exception("Unexpected type expected class or pointer, got:" + std::to_string(static_cast<int>(type.first)));
@@ -562,15 +565,22 @@ namespace cereal
 
       template<class T>
       // only for debug
-      inline void loadEndOfObjectData() {
+      inline void loadEndOfObjectData()
+      {
         if(emptyClass) {
           // empty class or shared pointer with object which was already saved
           std::cout << "loading epilogue (EMPTY)" << typeid(T).name() << "\n";
         } else {
           std::cout << "loading epilogue (NORMAL)" << typeid(T).name() << "\n";
-          loadEndOfClass();
+          loadTypeTag();
+          loadEndOfClass(true);
         }
         resetObjectDetails();
+      }
+
+      inline void loadOmittedObject()
+      {
+        loadEndOfClass(false);
       }
 
       inline std::uint32_t getLoadedClassVersion() const
@@ -660,20 +670,26 @@ namespace cereal
         }
       }
 
-      //! Skip data until end of class is reached
-      /*! @tparam expected_type is last_field indicating after last field in class
-          Consider checking if types have expected sizes */
-      inline void loadEndOfClass()
+      //! Skip data in archive loading at least one element until class depth 0 is reached.
+      /*! At the beginning if isInObject is set to true depth is assumed to be 1, 0 otherwise.
+          That means that if isInObject is set to truedata will be skipped untill FieldType::last_field
+          is reached for same depth.
+          If isInObject is set to false at least one field will be loaded.*/
+      inline void loadEndOfClass(bool isInObject)
       {
         using namespace extendable_binary_detail;
         using return_type = decltype(extendable_binary_detail::readType(std::uint8_t{}));
-        std::uint8_t v;
-        return_type type;
-        int class_depth = 1; // we are in an object
+        int class_depth = isInObject ? 1 : 0; // we are in an object
         std::size_t lastIgnoredSizeTag = 0; // TODO use other size type?
+
+        bool firstPass = true;
         do {
-          loadBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
-          type = readType(v);
+          if(false == firstPass) {
+            loadTypeTag();
+          }
+          firstPass = false;
+
+          return_type type = getTypeTagNoError<FieldType::class_t>();
           switch (type.first) {
             case FieldType::positive_integer:
             case FieldType::negative_integer: {
@@ -761,7 +777,7 @@ namespace cereal
               throw Exception("Unknown type of field: " + std::to_string(static_cast<int>(type.first)));
               // delete, it's already present in readType function
           }
-        } while ( type.first != FieldType::last_field || class_depth != 0);
+        } while(class_depth > 0);
       }
     private:
       std::uint32_t classVersion = 0;
@@ -771,6 +787,8 @@ namespace cereal
       std::string polymorphicName;
 
       std::size_t lastSizeTag = 0;
+      std::pair<extendable_binary_detail::FieldType, std::uint8_t> lastTypeTag =
+          {extendable_binary_detail::FieldType::last_field, 0};
 
       std::istream & itsStream;
       uint8_t itsConvertEndianness; //!< If set to true, we will need to swap bytes upon loading
@@ -796,7 +814,7 @@ namespace cereal
   CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, T & t)
   {
     using namespace extendable_binary_detail;
-    const auto type = ar.loadTypeTag<FieldType::integer_packed>();
+    const auto type = ar.getTypeTag<FieldType::integer_packed>();
     if( type.first == FieldType::omitted_field )
       return;
     t = type.second;
@@ -835,7 +853,7 @@ namespace cereal
   CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, T & t)
   {
     using namespace extendable_binary_detail;
-    auto type = ar.loadTypeTagNoError<FieldType::integer_packed>();
+    auto type = ar.getTypeTagNoError<FieldType::integer_packed>();
     switch(type.first) {
       case FieldType::omitted_field:
         return;
@@ -871,6 +889,7 @@ namespace cereal
         throw Exception("Unexpected type expected: integer got:" + std::to_string(static_cast<int>(type.first)));
     }
   }
+
   //! Saving for floating point to extendable binary
   template<class T> inline
   typename std::enable_if<std::is_floating_point<T>::value, void>::type
@@ -908,7 +927,7 @@ namespace cereal
                    "Extendable binary only supports IEEE 754 standardized floating point" );
     static_assert((sizeof(t) == 4) || (sizeof(t) == 8) || (sizeof(t) == 16), "unsupported float size");
     using namespace extendable_binary_detail;
-    auto type = ar.loadTypeTag<FieldType::floating_point>();
+    auto type = ar.getTypeTag<FieldType::floating_point>();
     if(type.first == FieldType::omitted_field)
       return;
     switch(type.second) {
@@ -970,7 +989,7 @@ namespace cereal
   void CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, SizeTag<T> & t)
   {
     using namespace extendable_binary_detail;
-    auto type = ar.loadTypeTag<FieldType::size_tag>();
+    auto type = ar.getTypeTag<FieldType::size_tag>();
     if(type.first == FieldType::omitted_field) {
       return;
     } else {
@@ -992,15 +1011,13 @@ namespace cereal
     using namespace extendable_binary_detail;
     std::uint8_t v = writeType(FieldType::omitted_field, 0);
     ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
-    // this could be skipped if it's the last field of a class
   }
 
   //! Loading OmittedFieldTag from extendable binary
   inline
   void CEREAL_LOAD_FUNCTION_NAME(ExtendableBinaryInputArchive & ar, OmittedFieldTag &)
   {
-    using namespace extendable_binary_detail;
-    ar.loadTypeTagNoError<FieldType::omitted_field>();
+    ar.loadOmittedObject();
   }
 
   //! Saving binary data to extendable binary
@@ -1038,7 +1055,7 @@ namespace cereal
                    (std::is_floating_point<TT>::value && std::numeric_limits<TT>::is_iec559),
                    "Extendable binary only supports IEEE 754 standardized floating point" );
     using namespace extendable_binary_detail;
-    const auto type = ar.loadTypeTag<FieldType::packed_array>();
+    const auto type = ar.getTypeTag<FieldType::packed_array>();
     if(type.first == FieldType::omitted_field)
       return;
     std::uint64_t sizeOfElem;
@@ -1166,12 +1183,11 @@ namespace cereal
   struct is_extendablebinary_empty_prologue_and_epilogue1 :
       traits::detail::meta_bool_or<
           std::is_arithmetic<T>::value,
-          std::is_same<T, std::nullptr_t>::value
+          std::is_same<T, std::nullptr_t>::value,
+          std::is_same<T, OmittedFieldTag>::value
       > {};
   template <class T>
   struct is_extendablebinary_empty_prologue_and_epilogue1<SizeTag<T>> : std::true_type {};
-  template <class T, std::size_t V>
-  struct is_extendablebinary_empty_prologue_and_epilogue1<std::array<T, V>> : std::true_type {};
   template <class T>
   struct is_extendablebinary_empty_prologue_and_epilogue1<BinaryData<T>> : std::true_type {};
   // TODO for input archive cache size, and store it specially for BinaryData
@@ -1187,8 +1203,10 @@ namespace cereal
 
   //! Prologue for arithmetic types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
-  void prologue( ExtendableBinaryInputArchive &, T const & )
-  { }
+  bool prologueLoad( ExtendableBinaryInputArchive & ar, T const & )
+  {
+    return ar.loadTypeTag();
+  }
 
   //! Epilogue for arithmetic types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
@@ -1221,6 +1239,16 @@ namespace cereal
   // TODO move to traits namespace
   template <class T>
   struct is_extendablebinary_internal_prologue_and_epilogue1<detail::VersionIdTag<T>> : std::true_type {};
+  template <class T>
+  struct is_extendablebinary_internal_prologue_and_epilogue1<detail::ObjectIdTag<T>> : std::true_type {};
+  template <class T>
+  struct is_extendablebinary_internal_prologue_and_epilogue1<detail::PointerValidityTag<T>> : std::true_type {};
+  template <class T>
+  struct is_extendablebinary_internal_prologue_and_epilogue1<detail::PolymorphicIdTag<T>> : std::true_type {};
+  template <class T>
+  struct is_extendablebinary_internal_prologue_and_epilogue1<detail::PolymorphicKeyTag<T>> : std::true_type {};
+  template <class T, std::size_t V>
+  struct is_extendablebinary_internal_prologue_and_epilogue1<std::array<T, V>> : std::true_type {};
 
   //! Prologue for internal types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
@@ -1231,8 +1259,10 @@ namespace cereal
 
   //! Prologue for internal types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
-  void prologue( ExtendableBinaryInputArchive &, T const & )
-  { }
+  bool prologueLoad( ExtendableBinaryInputArchive &, T const & )
+  {
+    return true;
+  }
 
   //! Epilogue for internal types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
@@ -1244,6 +1274,7 @@ namespace cereal
   void epilogue( ExtendableBinaryInputArchive &, T const & )
   { }
 
+#if 0 // have to change SizeTag to not save size two times in string and vector
   // ####string############################################
   //! Prologue for strings for ExtendableBinary archives
   template<class CharT, class Traits, class Alloc> inline
@@ -1254,8 +1285,10 @@ namespace cereal
 
   //! Prologue for strings for ExtendableBinary archives
   template<class CharT, class Traits, class Alloc> inline
-  void prologue(ExtendableBinaryInputArchive &, std::basic_string<CharT, Traits, Alloc> const &)
-  { }
+  bool prologueLoad(ExtendableBinaryInputArchive &, std::basic_string<CharT, Traits, Alloc> const &)
+  {
+    return true;
+  }
 
   //! Epilogue for strings for ExtendableBinary archives
   template<class CharT, class Traits, class Alloc> inline
@@ -1266,6 +1299,7 @@ namespace cereal
   template<class CharT, class Traits, class Alloc> inline
   void epilogue(ExtendableBinaryInputArchive &, std::basic_string<CharT, Traits, Alloc> const &)
   { }
+#endif
 
   // ###Objects###########################################################
   //! Prologue for all other types for ExtendableBinary archives (except minimal types)
@@ -1288,9 +1322,13 @@ namespace cereal
                                       !traits::has_minimal_input_serialization<T, ExtendableBinaryInputArchive>::value,
                                       !is_extendablebinary_empty_prologue_and_epilogue1<T>::value,
                                       !is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae>
-  inline void prologue( ExtendableBinaryInputArchive & ar, T const & )
+  inline bool prologueLoad( ExtendableBinaryInputArchive & ar, T const & )
   {
-    ar.loadObjectBeginning<T>();
+    const bool load = ar.loadTypeTag();
+    if(load) {
+      ar.loadObjectBeginning<T>();
+    }
+    return load;
   }
 
   //! Epilogue for all other types other for ExtendableBinary archives (except minimal types)

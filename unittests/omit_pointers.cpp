@@ -370,120 +370,169 @@ static bool check_first_none_extendable_binary(uint8_t two) {
 BOOST_AUTO_TEST_SUITE(OmitClassRegistration)
 
 /* both are reading and saving same fields */
-  BOOST_AUTO_TEST_CASE( OmitNone ) {
+  BOOST_AUTO_TEST_CASE(OmitNone)
+  {
     BOOST_CHECK(check_both_json(A::OMIT_NONE, A::OMIT_NONE));
     BOOST_CHECK(check_both_xml(A::OMIT_NONE, A::OMIT_NONE));
     BOOST_CHECK(check_both_extendable_binary(A::OMIT_NONE, A::OMIT_NONE));
   }
 
-  BOOST_AUTO_TEST_CASE( BothSkip1 ) {
+  BOOST_AUTO_TEST_CASE(BothSkip1)
+  {
     BOOST_CHECK(check_both_json(A::SKIP1_FROM_A, A::SKIP1_FROM_A));
     BOOST_CHECK(check_both_xml(A::SKIP1_FROM_A, A::SKIP1_FROM_A));
-  }
-  BOOST_AUTO_TEST_CASE( BothSkip2 ) {
-    BOOST_CHECK(check_both_json(A::SKIP2_FROM_A, A::SKIP2_FROM_A));
-    BOOST_CHECK(check_both_xml(A::SKIP2_FROM_A, A::SKIP2_FROM_A));
-  }
-  BOOST_AUTO_TEST_CASE( BothSkip3 ) {
-    BOOST_CHECK(check_both_json(A::SKIP3_FROM_A, A::SKIP3_FROM_A));
-    BOOST_CHECK(check_both_xml(A::SKIP3_FROM_A, A::SKIP3_FROM_A));
-  }
-#if 0
-  BOOST_AUTO_TEST_CASE( OmitBoth1 ) {
-    BOOST_CHECK(check_both_json(A::OMIT1_FROM_A, A::OMIT1_FROM_A));
-  }
-  BOOST_AUTO_TEST_CASE( OmitBoth2 ) {
-    BOOST_CHECK(check_both_json(A::OMIT2_FROM_A, A::OMIT2_FROM_A));
-  }
-  BOOST_AUTO_TEST_CASE( OmitBoth3 ) {
-    BOOST_CHECK(check_both_json(A::OMIT3_FROM_A, A::OMIT3_FROM_A));
+    BOOST_CHECK(check_both_extendable_binary(A::SKIP1_FROM_A, A::SKIP1_FROM_A));
   }
 
-  BOOST_AUTO_TEST_CASE( OmitBoth1a2 ) {
-    BOOST_CHECK(check_both_json(A::OMIT1_FROM_A|A::OMIT2_FROM_A                , A::OMIT1_FROM_A|A::OMIT2_FROM_A));
+  BOOST_AUTO_TEST_CASE(BothSkip2)
+  {
+    BOOST_CHECK(check_both_json(A::SKIP2_FROM_A, A::SKIP2_FROM_A));
+    BOOST_CHECK(check_both_xml(A::SKIP2_FROM_A, A::SKIP2_FROM_A));
+    BOOST_CHECK(check_both_extendable_binary(A::SKIP2_FROM_A, A::SKIP2_FROM_A));
   }
-  BOOST_AUTO_TEST_CASE( OmitBoth1a3 ) {
-    BOOST_CHECK(check_both_json(A::OMIT1_FROM_A|A::OMIT3_FROM_A                , A::OMIT1_FROM_A|A::OMIT3_FROM_A));
+
+  BOOST_AUTO_TEST_CASE(BothSkip3)
+  {
+    BOOST_CHECK(check_both_json(A::SKIP3_FROM_A, A::SKIP3_FROM_A));
+    BOOST_CHECK(check_both_xml(A::SKIP3_FROM_A, A::SKIP3_FROM_A));
+    BOOST_CHECK(check_both_extendable_binary(A::SKIP3_FROM_A, A::SKIP3_FROM_A));
   }
-  BOOST_AUTO_TEST_CASE( OmitBoth2a3 ) {
-    BOOST_CHECK(check_both_json(A::OMIT2_FROM_A|A::OMIT3_FROM_A                , A::OMIT2_FROM_A|A::OMIT3_FROM_A));
+
+  BOOST_AUTO_TEST_CASE(OmitBoth1)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT1_FROM_A, A::OMIT1_FROM_A));
   }
-  BOOST_AUTO_TEST_CASE( OmitBoth1a2a3 ) {
-    BOOST_CHECK(check_both_json(A::OMIT1_FROM_A|A::OMIT2_FROM_A|A::OMIT3_FROM_A, A::OMIT1_FROM_A|A::OMIT2_FROM_A|A::OMIT3_FROM_A));
+
+  BOOST_AUTO_TEST_CASE(OmitBoth2)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT2_FROM_A, A::OMIT2_FROM_A));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitBoth3)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT3_FROM_A, A::OMIT3_FROM_A));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitBoth1a2)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT1_FROM_A | A::OMIT2_FROM_A, A::OMIT1_FROM_A | A::OMIT2_FROM_A));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitBoth1a3)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT1_FROM_A | A::OMIT3_FROM_A, A::OMIT1_FROM_A | A::OMIT3_FROM_A));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitBoth2a3)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT2_FROM_A | A::OMIT3_FROM_A, A::OMIT2_FROM_A | A::OMIT3_FROM_A));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitBoth1a2a3)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT1_FROM_A | A::OMIT2_FROM_A | A::OMIT3_FROM_A,
+                                             A::OMIT1_FROM_A | A::OMIT2_FROM_A | A::OMIT3_FROM_A));
   }
 
 /* reading side is omitting fields */
 
-  BOOST_AUTO_TEST_CASE( OmitSec1 ) {
-    BOOST_CHECK(check_first_none_json(A::OMIT1_FROM_A));
-  }
-  BOOST_AUTO_TEST_CASE( OmitSec2 ) {
-    BOOST_CHECK(check_first_none_json(A::OMIT2_FROM_A));
-  }
-  BOOST_AUTO_TEST_CASE( OmitSec3 ) {
-    BOOST_CHECK(check_first_none_json(A::OMIT3_FROM_A));
+  BOOST_AUTO_TEST_CASE(OmitSec1)
+  {
+    BOOST_CHECK(check_first_none_extendable_binary(A::OMIT1_FROM_A));
   }
 
-  BOOST_AUTO_TEST_CASE( OmitSec1a2 ) {
-    BOOST_CHECK(check_first_none_json(A::OMIT1_FROM_A|A::OMIT2_FROM_A));
+  BOOST_AUTO_TEST_CASE(OmitSec2)
+  {
+    BOOST_CHECK(check_first_none_extendable_binary(A::OMIT2_FROM_A));
   }
-  BOOST_AUTO_TEST_CASE( OmitSec2a3 ) {
-    BOOST_CHECK(check_first_none_json(A::OMIT2_FROM_A|A::OMIT3_FROM_A));
+
+  BOOST_AUTO_TEST_CASE(OmitSec3)
+  {
+    BOOST_CHECK(check_first_none_extendable_binary(A::OMIT3_FROM_A));
   }
-  BOOST_AUTO_TEST_CASE( OmitSec1a3 ) {
-    BOOST_CHECK(check_first_none_json(A::OMIT1_FROM_A|A::OMIT3_FROM_A));
+
+  BOOST_AUTO_TEST_CASE(OmitSec1a2)
+  {
+    BOOST_CHECK(check_first_none_extendable_binary(A::OMIT1_FROM_A | A::OMIT2_FROM_A));
   }
-  BOOST_AUTO_TEST_CASE( OmitSec1a2a3 ) {
-    BOOST_CHECK(check_first_none_json(A::OMIT1_FROM_A|A::OMIT2_FROM_A|A::OMIT3_FROM_A));
+
+  BOOST_AUTO_TEST_CASE(OmitSec2a3)
+  {
+    BOOST_CHECK(check_first_none_extendable_binary(A::OMIT2_FROM_A | A::OMIT3_FROM_A));
   }
-#endif
+
+  BOOST_AUTO_TEST_CASE(OmitSec1a3)
+  {
+    BOOST_CHECK(check_first_none_extendable_binary(A::OMIT1_FROM_A | A::OMIT3_FROM_A));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitSec1a2a3)
+  {
+    BOOST_CHECK(check_first_none_extendable_binary(A::OMIT1_FROM_A | A::OMIT2_FROM_A | A::OMIT3_FROM_A));
+  }
 
 /* reading side is skipping fields */
 
-  BOOST_AUTO_TEST_CASE( SkipSec1 ) {
+  BOOST_AUTO_TEST_CASE(SkipSec1)
+  {
     BOOST_CHECK(check_first_none_extendable_binary(A::SKIP1_FROM_A));
     // BOOST_CHECK(check_first_none_json(A::SKIP1_FROM_A)); not working
   }
-  BOOST_AUTO_TEST_CASE( SkipSec2 ) {
+
+  BOOST_AUTO_TEST_CASE(SkipSec2)
+  {
     BOOST_CHECK(check_first_none_extendable_binary(A::SKIP2_FROM_A));
     BOOST_CHECK(check_first_none_json(A::SKIP2_FROM_A));
   }
-  BOOST_AUTO_TEST_CASE( SkipSec3 ) {
+
+  BOOST_AUTO_TEST_CASE(SkipSec3)
+  {
     BOOST_CHECK(check_first_none_extendable_binary(A::SKIP3_FROM_A));
     BOOST_CHECK(check_first_none_json(A::SKIP3_FROM_A));
   }
 
 /* writing side is skipping fields */
-#if 0
-/* omit first */
-  BOOST_AUTO_TEST_CASE( OmitFirst1 ) {
-    BOOST_CHECK(check_both(A::OMIT1_FROM_A, A::OMIT_NONE));
-  }
-  BOOST_AUTO_TEST_CASE( OmitFirst2 ) {
-    BOOST_CHECK(check_both(A::OMIT2_FROM_A, A::OMIT_NONE));
-  }
-  BOOST_AUTO_TEST_CASE( OmitFirst3 ) {
-    BOOST_CHECK(check_both(A::OMIT3_FROM_A, A::OMIT_NONE));
-  }
-  BOOST_AUTO_TEST_CASE( OmitFirst1a2 ) {
-    BOOST_CHECK(check_both(A::OMIT1_FROM_A|A::OMIT2_FROM_A, A::OMIT_NONE));
-  }
-  BOOST_AUTO_TEST_CASE( OmitFirst2a3 ) {
-    BOOST_CHECK(check_both(A::OMIT1_FROM_A|A::OMIT3_FROM_A, A::OMIT_NONE));
-  }
-  BOOST_AUTO_TEST_CASE( OmitNone1a2a3 ) {
-    BOOST_CHECK(check_both(A::OMIT1_FROM_A|A::OMIT2_FROM_A|A::OMIT3_FROM_A, A::OMIT_NONE));
+  BOOST_AUTO_TEST_CASE(OmitFirst1)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT1_FROM_A, A::OMIT_NONE));
   }
 
+  BOOST_AUTO_TEST_CASE(OmitFirst2)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT2_FROM_A, A::OMIT_NONE));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitFirst3)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT3_FROM_A, A::OMIT_NONE));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitFirst1a2)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT1_FROM_A | A::OMIT2_FROM_A, A::OMIT_NONE));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitFirst2a3)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT1_FROM_A | A::OMIT3_FROM_A, A::OMIT_NONE));
+  }
+
+  BOOST_AUTO_TEST_CASE(OmitNone1a2a3)
+  {
+    BOOST_CHECK(check_both_extendable_binary(A::OMIT1_FROM_A | A::OMIT2_FROM_A | A::OMIT3_FROM_A, A::OMIT_NONE));
+  }
+
+#if 0
+  /* Optional loading of all fields, not only omitted field would be required to pass this tests */
 /* skip first */
   BOOST_AUTO_TEST_CASE( SkipFirst1 ) {
-    BOOST_CHECK(check_both(A::SKIP1_FROM_A, A::OMIT_NONE));
+    BOOST_CHECK(check_both_extendable_binary(A::SKIP1_FROM_A, A::OMIT_NONE));
   }
   BOOST_AUTO_TEST_CASE( SkipFirst2 ) {
-    BOOST_CHECK(check_both(A::SKIP2_FROM_A, A::OMIT_NONE));
+    BOOST_CHECK(check_both_extendable_binary(A::SKIP2_FROM_A, A::OMIT_NONE));
   }
   BOOST_AUTO_TEST_CASE( SkipFirst3 ) {
-    BOOST_CHECK(check_both(A::SKIP3_FROM_A, A::OMIT_NONE));
+    BOOST_CHECK(check_both_extendable_binary(A::SKIP3_FROM_A, A::OMIT_NONE));
   }
 
 /* mixed skip */

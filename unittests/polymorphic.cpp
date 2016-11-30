@@ -178,6 +178,7 @@ CEREAL_REGISTER_TYPE(PolyDerived)
 struct PolyLA : std::enable_shared_from_this<PolyLA>
 {
   virtual void foo() = 0;
+  virtual ~PolyLA() { }
 };
 
 struct PolyDerivedLA : public PolyLA

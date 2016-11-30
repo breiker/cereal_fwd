@@ -985,8 +985,8 @@ namespace cereal
     ar.loadSize( st.size );
   }
 
-  //! Serializing OmittedFieldTag to binary
-  /*! Ommiting field in json archive is noop */
+  //! Serializing OmittedFieldTag in JSON
+  /*! Serializing omitted field in json archive is noop. */
   template <class Archive> inline
   CEREAL_ARCHIVE_RESTRICT(JSONInputArchive, JSONOutputArchive)
   CEREAL_SERIALIZE_FUNCTION_NAME( Archive &, OmittedFieldTag & )

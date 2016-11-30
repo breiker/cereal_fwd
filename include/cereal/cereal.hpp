@@ -115,6 +115,25 @@ namespace cereal
   void epilogue( Archive & /* archive */, T const & /* data */)
   { }
 
+  //! Called before a type is serialized (only load) to set up any special
+  //! archive state for processing some type
+  /*! If designing a serializer that needs to set up any kind of special
+      state or output extra information for a type, specialize this function
+      for the archive type and the types that require the extra information.
+
+      Called instead of prologue for input archives if ForwardSupport flag
+      is set. If function returns false serialize function and epilogue will
+      not be called. It is needed to implement OmittedFieldTag which allows not
+      having to save fields in newer versions without breaking forward compatibility.
+      Making additional tag is needed because some archives relies on field order for
+      correct loading.
+      @return if serialize and epilogue function should be called
+      @ingroup Internal */
+  template <class Archive, class T> inline
+  bool prologueLoad( Archive & /* archive */, T const & /* data */)
+  {
+    return true;
+  }
   // ######################################################################
   //! Special flags for archives
   /*! AllowEmptyClassElision
@@ -122,16 +141,19 @@ namespace cereal
         a serialization function.  Classes with no data members are considered to be
         empty.  Be warned that if this is enabled and you attempt to serialize an
         empty class with improperly formed serialize or load/save functions, no
-        static error will occur - the error will propogate silently and your
+        static error will occur - the error will propagate silently and your
         intended serialization functions may not be called.  You can manually
         ensure that your classes that have custom serialization are correct
         by using the traits is_output_serializable and is_input_serializable
         in cereal/details/traits.hpp.
       ForwardSupport
-        This saves class version for every object. Even if version was alredy saved
-        for same class. It's needed if first time field with version is not read
-        and later for the same type we don't have a way to get it since version
-        was saved only once. @see registerClassVersionImpl
+        - Saves class version for every object. Even if version was alredy saved
+        for same class. It's needed if first time field which has version information
+        attached is not read and later for the same type we don't have a way to get
+        it since version was saved only once.
+        @see registerClassVersionImpl
+        - Calls prologueLoad instead of prologue for input archive.
+        @see prologueLoad function.
       @ingroup Internal */
   enum Flags {
     AllowEmptyClassElision = 1,
@@ -624,7 +646,7 @@ namespace cereal
   class InputArchive : public detail::InputArchiveBase
   {
     public:
-      //! Construct the output archive
+      //! Construct the input archive
       /*! @param derived A pointer to the derived ArchiveType (pass this from the derived archive) */
       InputArchive(ArchiveType * const derived) :
         self(derived),
@@ -741,11 +763,34 @@ namespace cereal
     private:
       //! Serializes data after calling prologue, then calls epilogue
       template <class T> inline
-      void process( T && head )
+      void processPrologue( std::false_type, T && head )
       {
         prologue( *self, head );
         self->processImpl( head );
         epilogue( *self, head );
+      }
+
+      //! Calls prologue then if true calls serialize and epilogue
+      /*! See prologueLoad for more information.
+       * There are separate methods to not make unnecessary overhead for other archives. */
+      template <class T> inline
+      void processPrologue( std::true_type, T && head )
+      {
+        // TODO add likely predicate
+        if( prologueLoad( *self, head ) )
+        {
+          self->processImpl( head );
+          epilogue( *self, head );
+        }
+
+      }
+
+      //! Serializes data after calling prologue, then calls epilogue
+      template <class T> inline
+      void process( T && head )
+      {
+        using IsForwardSupport = std::integral_constant<bool, ((Flags & Flags::ForwardSupport) > 0)>;
+        processPrologue( IsForwardSupport(), std::forward<T>( head ) );
       }
 
       //! Unwinds to process all data
