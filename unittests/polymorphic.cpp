@@ -180,7 +180,6 @@ struct PolyLA : std::enable_shared_from_this<PolyLA>
 {
   virtual ~PolyLA() {}
   virtual void foo() = 0;
-  virtual ~PolyLA() { }
 };
 
 struct PolyDerivedLA : public PolyLA
