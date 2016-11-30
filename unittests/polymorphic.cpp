@@ -132,6 +132,7 @@ struct PolyBase
 {
   PolyBase() {}
   PolyBase( int xx, float yy ) : x(xx), y(yy) {}
+  virtual ~PolyBase() {}
   int x;
   float y;
 
@@ -177,6 +178,7 @@ CEREAL_REGISTER_TYPE(PolyDerived)
 
 struct PolyLA : std::enable_shared_from_this<PolyLA>
 {
+  virtual ~PolyLA() {}
   virtual void foo() = 0;
   virtual ~PolyLA() { }
 };

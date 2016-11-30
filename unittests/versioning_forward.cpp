@@ -1,4 +1,4 @@
-/*! \file versioning_backward.cpp
+/*! \file versioning_forward.cpp
     \brief Simple tests for reading archives with older application
     \ingroup Tests
 

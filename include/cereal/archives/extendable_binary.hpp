@@ -350,7 +350,8 @@ namespace cereal
                          for the values of default parameters */
       ExtendableBinaryInputArchive(std::istream & stream, Options const & options = Options::Default()) :
         InputArchive<ExtendableBinaryInputArchive, Flags::ForwardSupport>(this),
-        itsStream(stream),
+        sharedObjectStream(std::ios::binary | std::ios::in | std::ios::out),
+        itsStream(stream, sharedObjectStream),
         itsConvertEndianness( false )
       {
         uint8_t streamLittleEndian;
@@ -368,7 +369,10 @@ namespace cereal
       void loadBinary( void * const data, std::size_t size )
       {
         // load data
-        auto const readSize = static_cast<std::size_t>( itsStream.rdbuf()->sgetn( reinterpret_cast<char*>( data ), size ) );
+        auto const readSize = itsStream.readBinary( reinterpret_cast<char*>( data ), size );
+        if(false == savedShared.saving.empty()) {
+          sharedObjectStream.write(reinterpret_cast<char*>(data), size);
+        }
 
         if(readSize != size)
           throw Exception("Failed to read " + std::to_string(size) + " bytes from input stream! Read " + std::to_string(readSize));
@@ -381,14 +385,16 @@ namespace cereal
             extendable_binary_detail::swap_bytes<DataSize>( ptr + i );
         }
       }
+      
       //! Discards size bytes from the input stream
       /*! @param size The number of bytes in the data
           Throws if not enough bytes are read */
-      inline void skipData( std::size_t size )
-      {
-        itsStream.ignore( size );
-        if(itsStream.bad())
-          throw Exception("Failed to skip " + std::to_string(size) + " bytes from input stream!");
+      inline void skipData(std::size_t size) {
+        if(savedShared.saving.empty()) {
+          itsStream.skipData(size);
+        } else {
+          itsStream.readToOtherStream(size, sharedObjectStream);
+        }
       }
 
       //! Load type tag from input stream
@@ -536,7 +542,7 @@ namespace cereal
         loadVarint(ignore);
     }
 
-      template<class T> // only for debug
+      template<class T> // template only for debug
       inline void loadObjectBeginning()
       {
         resetObjectDetails();
@@ -563,8 +569,7 @@ namespace cereal
         }
       }
 
-      template<class T>
-      // only for debug
+      template<class T> // template only for debug
       inline void loadEndOfObjectData()
       {
         if(emptyClass) {
@@ -619,6 +624,13 @@ namespace cereal
       }
 
     private:
+
+      struct SavedShared {
+        std::vector<std::pair<std::uint32_t, extendable_binary_detail::StreamPos>> saving; // alternatively can use stack and recursion
+        std::map<std::uint32_t, extendable_binary_detail::StreamPos> saved;
+        std::set<std::uint32_t> loaded;
+      };
+
       inline void resetObjectDetails()
       {
         // should be reset on all fields?
@@ -641,6 +653,43 @@ namespace cereal
         }
       }
 
+      void loadSharedPointer()
+      {
+        const auto normalObjectId = objectId & ~detail::msb_32bit;
+        const auto wasSkipped = savedShared.saved.find(normalObjectId);
+        // usual path
+        if(wasSkipped == savedShared.saved.end())
+          return;
+
+        const bool isNewObjectInStream = (objectId & detail::msb_32bit);
+        const auto alreadyLoaded = savedShared.loaded.find(normalObjectId);
+        if (false == isNewObjectInStream) {
+          /* Object was not loaded before according to stream order. */
+          if (alreadyLoaded == savedShared.loaded.end()) {
+            // TODO we can delete it here (if we made a copy)
+            savedShared.loaded.emplace(normalObjectId);
+            // we change objectId to indicate that we want to load it now
+            objectId = objectId | detail::msb_32bit;
+            pushLoadShared(wasSkipped->second);
+            emptyClass = false; // unneeded redundancy?
+          }
+        } else if (alreadyLoaded == savedShared.loaded.end()) {
+          /* NewObjectInStream, was skipped and not loaded before.
+           * Here we are loading it with stream order (stream indicates that it's new object) so there's no need to
+           * push additional stream position, it is naturally next in stream.
+           * We just have to mark that that object is now being loaded so we don't load it again and make duplicate with
+           * different address. */
+          savedShared.loaded.emplace(normalObjectId);
+        } else if (alreadyLoaded != savedShared.loaded.end()) {
+          /* NewObjectInStream, was skipped but was loaded before.
+           * We don't want to load it for the second time. We have move forward in the stream to the end of object. */
+          objectId = normalObjectId;
+          emptyClass = true;
+          // move forward
+          itsStream.skipData(wasSkipped->second.end - wasSkipped->second.start);
+        }
+      }
+
       inline void loadPointerData(std::uint8_t pointerMarkers)
       {
         using namespace extendable_binary_detail;
@@ -650,6 +699,7 @@ namespace cereal
         }
         if (markers & PointerMarkers::IsSharedPtr) {
           loadVarint(objectId);
+          loadSharedPointer();
         }
         if (markers & PointerMarkers::IsPolymorphicPointer) {
           loadBinary<sizeof(std::int32_t)>(&polymorphicId, sizeof(std::int32_t));
@@ -705,7 +755,10 @@ namespace cereal
             case FieldType::omitted_field:
               break; // one byte
             case FieldType::last_field: {
-              /* what we expected, but only if we didn't go into next class field */
+              /* what we expected, but only if we didn't go into next class_field */
+              if(isSkippedSharedObjectEnd(class_depth)) {
+                popSaveShared();
+              }
               --class_depth;
               break; // one byte
             }
@@ -727,7 +780,10 @@ namespace cereal
               if(markers & PointerMarkers::IsSharedPtr) {
                 std::uint32_t objectIdTmp;
                 loadVarint(objectIdTmp);
-                throw Exception("not implemented skipped shared ptr");
+                if(objectIdTmp & detail::msb_32bit) {
+                  pushSaveShared(objectIdTmp & ~detail::msb_32bit, class_depth);
+                }
+//                throw Exception("not implemented skipped shared ptr");
                 /* Only loading non registered shared pointer is not supported so don't throw exception here.
                  * Only temporary */
               }
@@ -779,6 +835,40 @@ namespace cereal
           }
         } while(class_depth > 0);
       }
+
+      inline void pushSaveShared(std::uint32_t skippedObjectId, int classDepth)
+      {
+        savedShared.saving.emplace_back(
+            std::make_pair(skippedObjectId,
+                           extendable_binary_detail::StreamPos{sharedObjectStream.tellp(),
+                                                               static_cast<std::streamoff>(classDepth)
+                           }));
+      }
+
+      /* Called at the end of shared object loading */
+      inline bool isSkippedSharedObjectEnd(int classDepth)
+      {
+        return false == savedShared.saving.empty()
+               && savedShared.saving.back().second.end == static_cast<std::streamoff>(classDepth);
+      }
+
+      /** End of saving skipped shared object */
+      inline void popSaveShared()
+      {
+        if (savedShared.saving.empty()) // maybe check earlier
+          throw Exception("unexpected end of shared object");
+        auto &last = savedShared.saving.back();
+        last.second.end = sharedObjectStream.tellp();
+        savedShared.saved.emplace(last.first, last.second);
+        savedShared.saving.pop_back();
+      }
+
+      inline void pushLoadShared(extendable_binary_detail::StreamPos &pos)
+      {
+        itsStream.pushReadingPos(pos);
+      }
+
+
     private:
       std::uint32_t classVersion = 0;
       bool emptyClass = false;
@@ -790,7 +880,10 @@ namespace cereal
       std::pair<extendable_binary_detail::FieldType, std::uint8_t> lastTypeTag =
           {extendable_binary_detail::FieldType::last_field, 0};
 
-      std::istream & itsStream;
+      SavedShared savedShared;
+      std::stringstream sharedObjectStream;
+      extendable_binary_detail::StreamAdapter itsStream;
+
       uint8_t itsConvertEndianness; //!< If set to true, we will need to swap bytes upon loading
   };
 
