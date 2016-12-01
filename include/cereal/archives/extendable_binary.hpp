@@ -185,17 +185,14 @@ namespace cereal
       }
 
       //! Writes object properites to stream. Called in prologue for objects
-      template<class T> // template only for debug
       void saveObjectEnd()
       {
         if(objectDataNeedsSaving) {
           // no other fields were saved we have to save objectData with empty marker
           saveObjectData(true);
-          std::cout << "epilogue (EMPTY):" << typeid(T).name() << "\n";
         } else{
           // there were fields in class, have to save end marker
           saveEndMarker();
-          std::cout << "epilogue (NORMAL):" << typeid(T).name() << "\n";
           /* TODO we are saving last_field marker for pointers even if it's not needed
            * Easiest way to solve it wold be to make queue of save object types in archive to know that we don't have to save it.
            * But that would mean that we would have to allocate some memory. We could also make specializations for prologue for pointer types
@@ -240,7 +237,6 @@ namespace cereal
             saveBinary<sizeof(decltype(polymorphicName)::value_type)>( polymorphicName.c_str(),
                 polymorphicName.size() * sizeof(decltype(polymorphicName)::value_type));
           }
-          std::cout << "saving pointer with marker:" << static_cast<int>(finalMarker) << "\n";
         } else {
           ClassMarkers finalMarker = ClassMarkers::None;
           if(classVersion > 0) {
@@ -542,7 +538,6 @@ namespace cereal
         loadVarint(ignore);
     }
 
-      template<class T> // template only for debug
       inline void loadObjectBeginning()
       {
         resetObjectDetails();
@@ -550,7 +545,6 @@ namespace cereal
         // TODO block serialize
         using namespace extendable_binary_detail;
         const auto type = getTypeTagNoError<FieldType::class_t>();
-        std::cout << "loading prologue " << typeid(T).name() << "->" << std::to_string(static_cast<int>(type.first)) << ":" << std::to_string(type.second) << "\n";
         switch(type.first) {
           case FieldType::class_t: {
             loadClassData(type.second);
@@ -569,14 +563,11 @@ namespace cereal
         }
       }
 
-      template<class T> // template only for debug
       inline void loadEndOfObjectData()
       {
         if(emptyClass) {
           // empty class or shared pointer with object which was already saved
-          std::cout << "loading epilogue (EMPTY)" << typeid(T).name() << "\n";
         } else {
-          std::cout << "loading epilogue (NORMAL)" << typeid(T).name() << "\n";
           loadTypeTag();
           loadEndOfClass(true);
         }
@@ -1291,7 +1282,6 @@ namespace cereal
   void prologue( ExtendableBinaryOutputArchive & ar, T const & )
   {
     ar.savingOtherField();
-    std::cout << "EMPTY (starting) prologue:" << typeid(T).name() << "\n";
   }
 
   //! Prologue for arithmetic types for ExtendableBinary archives
@@ -1346,9 +1336,7 @@ namespace cereal
   //! Prologue for internal types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
   void prologue( ExtendableBinaryOutputArchive &, T const & )
-  {
-    std::cout << "EMPTY (internal) prologue:" << typeid(T).name() << "\n";
-  }
+  { }
 
   //! Prologue for internal types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
@@ -1407,7 +1395,6 @@ namespace cereal
   inline void prologue( ExtendableBinaryOutputArchive & ar, T const & )
   {
     ar.saveObjectBeginning();
-    std::cout << "prologue:" << typeid(T).name() << "\n";
   }
 
   //! Prologue for all other types for ExtendableBinary archives
@@ -1419,7 +1406,7 @@ namespace cereal
   {
     const bool load = ar.loadTypeTag();
     if(load) {
-      ar.loadObjectBeginning<T>();
+      ar.loadObjectBeginning();
     }
     return load;
   }
@@ -1433,7 +1420,7 @@ namespace cereal
                                       !is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae>
   inline void epilogue( ExtendableBinaryOutputArchive & ar, T const & )
   {
-    ar.saveObjectEnd<T>();
+    ar.saveObjectEnd();
   }
 
   //! Epilogue for all other types other for ExtendableBinary archives
@@ -1443,7 +1430,7 @@ namespace cereal
                                       !is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae>
   inline void epilogue( ExtendableBinaryInputArchive & ar, T const & )
   {
-    ar.loadEndOfObjectData<T>();
+    ar.loadEndOfObjectData();
   }
 } // namespace cereal
 
