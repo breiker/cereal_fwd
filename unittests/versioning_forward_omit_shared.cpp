@@ -388,11 +388,11 @@ BOOST_AUTO_TEST_CASE( extendable_binary_omited_shared_out_of_order )
 
 struct Version0
 {
-  static constexpr std::uint32_t version = 0;
+  static const std::uint32_t version = 0;
 };
 struct Version1
 {
-  static constexpr std::uint32_t version = 1;
+  static const std::uint32_t version = 1;
 };
 
 struct Z

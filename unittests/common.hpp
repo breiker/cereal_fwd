@@ -115,9 +115,18 @@ random_value(std::mt19937 & gen)
     c = static_cast<char>( std::uniform_int_distribution<int>( 'A', 'Z' )(gen) );
   return s;
 }
+//! Had to create trait to check if type is array.
+/*! Gcc accepts std::enable_if<std::is_same<T, std::array<T::value_type, std::tuple_size<T>::value>..., MSVC 2013 gives
+   static assert on not defined tuple_size for other types.
+   Gcc also accepts std::enable_if<std::is_same<T, std::array<T::value_type, T().size>..., msvc2013 gives
+   C1001 - Compiler Fatal Error. */
+template<class T>
+struct is_array : std::false_type {};
+template<class V, std::size_t S>
+struct is_array<std::array<V, S>> : std::true_type {};
 
 template<class T> inline
-typename std::enable_if<std::is_same<T, typename std::array<typename T::value_type, std::tuple_size<T>::value>>::value, T>::type
+typename std::enable_if<is_array<T>::value, T>::type
 random_value(std::mt19937 & gen)
 {
   T s;

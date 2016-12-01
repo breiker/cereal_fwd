@@ -661,7 +661,7 @@ namespace cereal
         if(wasSkipped == savedShared.saved.end())
           return;
 
-        const bool isNewObjectInStream = (objectId & detail::msb_32bit);
+        const bool isNewObjectInStream = (objectId & detail::msb_32bit) != 0;
         const auto alreadyLoaded = savedShared.loaded.find(normalObjectId);
         if (false == isNewObjectInStream) {
           /* Object was not loaded before according to stream order. */
@@ -924,7 +924,7 @@ namespace cereal
     using unsigned_type = typename std::make_unsigned<T>::type;
     // can be stored in the same byte as type
     if( t < 0xf && t >= 0 ) {
-      std::uint8_t v = writeType(FieldType::integer_packed, t);
+      std::uint8_t v = writeType(FieldType::integer_packed, static_cast<std::uint8_t>(t));
       ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(v));
     } else {
       // note that abs of minimal value for signed type may not to stored the same signed type
@@ -1074,7 +1074,7 @@ namespace cereal
     std::uint8_t v = writeType(fieldType, neededBytes);
     ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(v));
     // TODO fix for big endian
-    ar.saveBinary<sizeof(t.size)>(std::addressof(t.size), neededBytes);
+    ar.saveBinary<sizeof(T)>(std::addressof(t.size), static_cast<std::size_t>(neededBytes));
   }
 
   //! Loading SizeTag from extendable binary
@@ -1092,7 +1092,7 @@ namespace cereal
       }
       t.size = 0;
       // TODO fix big endian, size of elem may be wrong
-      ar.template loadBinary<sizeof(t.size)>(std::addressof(t.size), neededByteSize);
+      ar.template loadBinary<sizeof(T)>(std::addressof(t.size), neededByteSize);
       ar.setLastSizeTag(t.size);
     }
   }
@@ -1250,7 +1250,7 @@ namespace cereal
   template <class T> inline
   void CEREAL_SAVE_FUNCTION_NAME(ExtendableBinaryOutputArchive & ar, detail::PointerValidityTag<T> const & pointerValidityTag)
   {
-    ar.savePointerValidityTag(pointerValidityTag.valid);
+    ar.savePointerValidityTag(pointerValidityTag.valid != 0);
   }
 
   //! Loading PointerValidityTag from extendable binary

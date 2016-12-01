@@ -155,7 +155,7 @@ namespace cereal
 
     //! max size of saved varint
     /*! enough to save uint64_t 8 */
-    constexpr std::size_t maxVarintSize = 10;
+    enum { maxVarintSize = 10 };
 
     inline std::uint8_t writeType(FieldType fieldType, std::uint8_t other) {
       return (static_cast<std::uint8_t>(fieldType) << 4) | (0xf & other);

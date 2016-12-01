@@ -116,7 +116,7 @@ struct OuterOld
 template<class NewType>
 struct InnerNew : public StructBaseT<NewType>
 {
-    InnerNew() : StructBaseT<NewType>{0, 0} {}
+    InnerNew() : StructBaseT<NewType>(0, 0) {}
     InnerNew(int x_, const NewType& y_) : StructBaseT<NewType>(x_, y_) {}
 
     template<class Archive>
