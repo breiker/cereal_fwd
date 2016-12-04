@@ -133,7 +133,6 @@ struct InnerFirstNew : public InnerFirstBase<T, T2>
     ar(this->x_base);
     ar(x);
     if (version >= 1) {
-      std::cout << "saving shared_ptr" << std::endl;
       ar(this->ptr);
       ar(x);
       ar(this->ptr2);
@@ -718,6 +717,7 @@ void test_omited_shared_out_of_order_3()
     BOOST_CHECK(*o_struct.toQ == *i_struct.toQ);
     BOOST_CHECK_EQUAL(o_struct.inner.x, i_struct.inner.x);
     // addresses
+    BOOST_REQUIRE(i_struct.toZ != nullptr);
     BOOST_REQUIRE(i_struct.toQ != nullptr);
     BOOST_REQUIRE(i_struct.toQ->toZ != nullptr);
     BOOST_REQUIRE(i_struct.toQ2 != nullptr);
@@ -727,10 +727,111 @@ void test_omited_shared_out_of_order_3()
     BOOST_CHECK_EQUAL(i_struct.toQ, i_struct.toQ2);
     BOOST_CHECK(*o_struct.toZ == *i_struct.toZ);
     BOOST_CHECK_EQUAL(i_struct.toZ, i_struct.toZ2);
+    BOOST_CHECK_EQUAL(i_struct.toZ, i_struct.toQ->toZ);
   };
 }
 
 BOOST_AUTO_TEST_CASE( extendable_binary_omited_shared_out_of_order_3 )
 {
   test_omited_shared_out_of_order_3<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
+
+
+
+
+/*
+* # Z {    - 1
+* # }      - 2
+* # Q {    - 3
+* #    Z @1- 4
+* #    }   - 5
+* #}       - 4
+*  Q @ 3
+*/
+
+template<class Version>
+struct Inner4
+{
+  int x;
+  std::shared_ptr<Z> toZ;
+  std::shared_ptr<Q> toQ;
+  int y;
+
+  template<class Archive>
+  void serialize(Archive & ar, std::uint32_t version)
+  {
+    ar(x);
+    if (Version::version >= 1 && version >= 1) {
+      ar(toZ);
+      ar(toQ);
+      ar(y);
+    }
+
+  }
+};
+
+template<class Version>
+struct Out4
+{
+  Inner4<Version> inner;
+  std::shared_ptr<Q> toQ;
+  std::shared_ptr<Z> toZ;
+  std::shared_ptr<Q> toQ2;
+  std::shared_ptr<Z> toZ2;
+
+  template<class Archive>
+  void serialize(Archive & ar, std::uint32_t)
+  {
+    ar(inner, toQ, toZ, toQ2, toZ2);
+  }
+};
+
+CEREAL_CLASS_VERSION(Inner4<Version1>, 1)
+
+template<class IArchive, class OArchive>
+void test_omited_shared_out_of_order_4()
+{
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  for (int ii = 0; ii < ITERATIONS_PER_TEST; ++ii) {
+    auto toZ = std::shared_ptr<Z>(new Z{random_value<int>(gen)});
+    auto toQ = std::shared_ptr<Q>(new Q{toZ, random_value<int>(gen)});
+    Out4<Version1> o_struct = {Inner4<Version1>{random_value<int>(gen), toZ, toQ, random_value<int>(gen)}, toQ, toZ, toQ, toZ};
+
+    std::ostringstream os;
+    {
+      OArchive oar(os);
+      oar(o_struct);
+    }
+
+    Out4<Version0> i_struct;
+
+    std::istringstream is(os.str());
+    {
+      IArchive iar(is);
+      iar(i_struct);
+    }
+
+    BOOST_CHECK(*o_struct.toQ == *i_struct.toQ);
+    BOOST_CHECK_EQUAL(o_struct.inner.x, i_struct.inner.x);
+    // addresses
+    BOOST_REQUIRE(i_struct.toZ != nullptr);
+    BOOST_REQUIRE(i_struct.toQ != nullptr);
+    BOOST_REQUIRE(i_struct.toQ->toZ != nullptr);
+    BOOST_REQUIRE(i_struct.toQ2 != nullptr);
+    BOOST_REQUIRE(i_struct.toQ2->toZ != nullptr);
+
+    BOOST_CHECK(*o_struct.toQ == *i_struct.toQ);
+    BOOST_CHECK_EQUAL(i_struct.toQ, i_struct.toQ2);
+    BOOST_CHECK(*o_struct.toZ == *i_struct.toZ);
+    BOOST_CHECK_EQUAL(i_struct.toZ, i_struct.toZ2);
+    BOOST_CHECK_EQUAL(i_struct.toZ, i_struct.toQ->toZ);
+  };
+}
+
+BOOST_AUTO_TEST_CASE( extendable_binary_omited_shared_out_of_order_4 )
+{
+  test_omited_shared_out_of_order_4<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
 }
