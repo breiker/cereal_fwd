@@ -1286,9 +1286,9 @@ namespace cereal
 
   //! Prologue for arithmetic types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
-  bool prologueLoad( ExtendableBinaryInputArchive & ar, T const & )
+  FieldSerialized prologueLoad( ExtendableBinaryInputArchive & ar, T const & )
   {
-    return ar.loadTypeTag();
+    return ar.loadTypeTag() ? FieldSerialized::YES : FieldSerialized::NO;
   }
 
   //! Epilogue for arithmetic types for ExtendableBinary archives
@@ -1340,9 +1340,9 @@ namespace cereal
 
   //! Prologue for internal types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
-  bool prologueLoad( ExtendableBinaryInputArchive &, T const & )
+  FieldSerialized prologueLoad( ExtendableBinaryInputArchive &, T const & )
   {
-    return true;
+    return FieldSerialized::INTERNAL;
   }
 
   //! Epilogue for internal types for ExtendableBinary archives
@@ -1366,9 +1366,9 @@ namespace cereal
 
   //! Prologue for strings for ExtendableBinary archives
   template<class CharT, class Traits, class Alloc> inline
-  bool prologueLoad(ExtendableBinaryInputArchive &, std::basic_string<CharT, Traits, Alloc> const &)
+  FieldSerialized prologueLoad(ExtendableBinaryInputArchive &, std::basic_string<CharT, Traits, Alloc> const &)
   {
-    return true;
+    return FieldSerialized::INTERNAL;
   }
 
   //! Epilogue for strings for ExtendableBinary archives
@@ -1402,13 +1402,13 @@ namespace cereal
                                       !traits::has_minimal_input_serialization<T, ExtendableBinaryInputArchive>::value,
                                       !is_extendablebinary_empty_prologue_and_epilogue1<T>::value,
                                       !is_extendablebinary_internal_prologue_and_epilogue1<T>::value> = traits::sfinae>
-  inline bool prologueLoad( ExtendableBinaryInputArchive & ar, T const & )
+  inline FieldSerialized prologueLoad( ExtendableBinaryInputArchive & ar, T const & )
   {
     const bool load = ar.loadTypeTag();
     if(load) {
       ar.loadObjectBeginning();
     }
-    return load;
+    return load ? FieldSerialized::YES : FieldSerialized::NO;
   }
 
   //! Epilogue for all other types other for ExtendableBinary archives (except minimal types)

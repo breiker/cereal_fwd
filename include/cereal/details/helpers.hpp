@@ -353,6 +353,13 @@ namespace cereal
     return {std::forward<KeyType>(key), std::forward<ValueType>(value)};
   }
 
+  enum class FieldSerialized
+  {
+      YES,
+      NO,
+      INTERNAL
+  };
+
   namespace detail
   {
     //! A wrapper around polymorphic id

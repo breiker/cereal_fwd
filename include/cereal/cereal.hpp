@@ -130,9 +130,9 @@ namespace cereal
       @return if serialize and epilogue function should be called
       @ingroup Internal */
   template <class Archive, class T> inline
-  bool prologueLoad( Archive & /* archive */, T const & /* data */)
+  FieldSerialized prologueLoad( Archive & /* archive */, T const & /* data */)
   {
-    return true;
+    return FieldSerialized::YES;
   }
   // ######################################################################
   //! Special flags for archives
@@ -353,7 +353,16 @@ namespace cereal
         else
           return id->second;
       }
-
+      //! Indicates if last field was saved
+      /*! Fields are always saved, in case of error exception is thrown.
+          This method is kept for compatibility with input archive to be usable
+          in serialize method (which can be called for both input and output
+          archives).
+         @returns always true */
+      bool wasSerialized() const
+      {
+        return true;
+      }
       //! indicates if archive is used for saving
       using is_saving = std::true_type;
       //! indicates if archive is used for loading
@@ -654,7 +663,8 @@ namespace cereal
         itsBaseClassSet(),
         itsSharedPointerMap(),
         itsPolymorphicTypeMap(),
-        itsVersionedTypes()
+        itsVersionedTypes(),
+        wasLastFieldSerialized(FieldSerialized::YES)
       { }
 
       InputArchive & operator=( InputArchive const & ) = delete;
@@ -755,6 +765,23 @@ namespace cereal
         itsPolymorphicTypeMap.insert( {stripped_id, name} );
       }
 
+      //! Indicates if last field was loaded
+      /*! Always true for archives not supporting forward compatibility flag.
+         For other archives returns false if field was not saved. It means that OmittedTag
+         was used on the saving side.
+         Truth table:
+           T - type is written/read
+           O - OmittedTag is used
+           |Writing side | Reading side | Return value |
+           | T           | T            | true         |
+           | O           | O            | false        |
+           | T           | O            | true         |
+           | O           | T            | false        |
+         @returns if last field was loaded */
+      bool wasSerialized() const
+      {
+        return wasLastFieldSerialized == FieldSerialized::YES;
+      }
 
       //! indicates if archive is used for saving
       using is_saving = std::false_type;
@@ -778,12 +805,15 @@ namespace cereal
       void processPrologue( std::true_type, T && head )
       {
         // TODO add likely predicate
-        if( prologueLoad( *self, head ) )
+        const FieldSerialized loadRest = prologueLoad( *self, head );
+        if(loadRest != FieldSerialized::NO)
         {
           self->processImpl( head );
           epilogue( *self, head );
         }
-
+        if(loadRest != FieldSerialized::INTERNAL) {
+          wasLastFieldSerialized = loadRest;
+        }
       }
 
       //! Serializes data after calling prologue, then calls epilogue
@@ -1055,6 +1085,9 @@ namespace cereal
 
       //! Maps from type hash codes to version numbers
       std::unordered_map<std::size_t, std::uint32_t> itsVersionedTypes;
+
+      //! Indicates if last field was loaded
+      FieldSerialized wasLastFieldSerialized;
   }; // class InputArchive
 } // namespace cereal
 

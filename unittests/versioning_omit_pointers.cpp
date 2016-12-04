@@ -197,6 +197,9 @@ class A {
     } else {
       ar & CEREAL_NVP(AAtoBB1);
     }
+    if(Archive::is_loading::value) {
+      BOOST_CHECK_EQUAL(ar.wasSerialized(), false == (A_VERSION_WRITE & OMIT1_FROM_A));
+    }
     if(version & OMIT2_FROM_A) {
       ar(CEREAL_NVP(cereal::OmittedFieldTag())); // AA*
     } else if(version & SKIP2_FROM_A) {
@@ -205,12 +208,18 @@ class A {
     } else {
       ar & CEREAL_NVP(AAtoBB2);
     }
+    if(Archive::is_loading::value) {
+      BOOST_CHECK_EQUAL(ar.wasSerialized(), false == (A_VERSION_WRITE & OMIT2_FROM_A));
+    }
     if(version & OMIT3_FROM_A) {
       ar(CEREAL_NVP(cereal::OmittedFieldTag())); // AAA*
     } else if(version & SKIP3_FROM_A) {
       return;
     } else {
       ar & CEREAL_NVP(AAAtoBBB);
+    }
+    if(Archive::is_loading::value) {
+      BOOST_CHECK_EQUAL(ar.wasSerialized(), false == (A_VERSION_WRITE & OMIT3_FROM_A));
     }
   }
   bool check() {
