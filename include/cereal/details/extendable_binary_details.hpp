@@ -278,7 +278,7 @@ namespace cereal
             endOfWritingStream = backStream.tellg();
           } else {
             // save current position when we get back to this level
-            backStreams.push(std::make_pair(backStream.tellg(), &streamPos));
+            backStreams.push(std::make_pair(backStream.tellg(), nowReading));
           }
           backStream.seekg(streamPos.start);
           nowReading = &streamPos;
