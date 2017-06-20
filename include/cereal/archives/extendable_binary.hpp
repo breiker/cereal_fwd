@@ -30,8 +30,12 @@
 #define CEREAL_ARCHIVES_EXTENDABLE_BINARY_HPP_
 
 #include <cereal/cereal.hpp>
-#include <sstream>
+#include <cereal/types/memory.hpp>
+#include <cstring>
 #include <limits>
+#include <map>
+#include <set>
+#include <sstream>
 
 #include <cereal/details/extendable_binary_details.hpp>
 

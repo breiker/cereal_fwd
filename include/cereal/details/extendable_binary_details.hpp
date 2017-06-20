@@ -30,8 +30,10 @@
 #define CEREAL_DETAILS_EXTENDABLE_BINARY_DETAILS_HPP_
 
 #include <cereal/cereal.hpp>
-#include <sstream>
 #include <limits>
+#include <sstream>
+#include <queue>
+#include <assert.h>
 
 namespace cereal
 {
