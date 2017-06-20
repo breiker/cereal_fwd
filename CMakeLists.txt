@@ -73,3 +73,7 @@ if(DOXYGEN_FOUND)
     )
 
 endif(DOXYGEN_FOUND)
+
+if (BUILD_BENCHMARKS)
+    add_subdirectory(benchmark)
+endif ()

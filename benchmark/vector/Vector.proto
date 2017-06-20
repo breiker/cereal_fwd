@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+
+message ProtoVectorInt {
+    repeated sfixed32 f1 = 1;
+}
+
+message ProtoVectorFloat {
+    repeated float f1 = 1;
+}
+
+message ProtoVectorString {
+    repeated string f1 = 1;
+}

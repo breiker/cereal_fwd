@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+
+message ProtoIntegerClass {
+    sint32 f1 = 1;
+    sint32 f2 = 2;
+    sint32 f3 = 3;
+    sint32 f4 = 4;
+    sint32 f5 = 5;
+    sint32 f6 = 6;
+    sint32 f7 = 7;
+    sint32 f8 = 8;
+    sint32 f9 = 9;
+    sint32 f10 = 10;
+}
+
+message ProtoIntegerClassVect {
+    repeated ProtoIntegerClass f1 = 1;
+}
