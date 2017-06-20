@@ -914,7 +914,7 @@ namespace cereal
     using namespace extendable_binary_detail;
     using unsigned_type = typename std::make_unsigned<T>::type;
     // can be stored in the same byte as type
-    if( t < 0xf && t >= 0 ) {
+    if( t <= 0xf && t >= 0 ) {
       std::uint8_t v = writeType(FieldType::integer_packed, static_cast<std::uint8_t>(t));
       ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(v));
     } else {
