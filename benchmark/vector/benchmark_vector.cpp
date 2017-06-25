@@ -3,112 +3,14 @@
 //
 
 
+#include "benchmark_vector.hpp"
 #include <benchmark/benchmark.h>
 #include "benchmark_config.hpp"
 
-#include <boost/serialization/vector.hpp>
-#include "cereal/types/vector.hpp"
-
 #include "Vector.pb.h"
 
-#include "integer_class.hpp" // TODO delete
-
-namespace ba = boost::archive;
-namespace c = cereal;
-
-using boost_binary_oarchive = boost::archive::binary_oarchive;
-using boost_binary_iarchive = boost::archive::binary_iarchive;
-
-//////////////////////////
-// Protobuf adapters
-/////////////////////////
-
-template<>
-struct ProtoClass<std::vector<std::int32_t>>
-{
-  using type = ProtoVectorInt;
-};
-template<>
-struct ProtoClass<std::vector<float>>
-{
-  using type = ProtoVectorFloat;
-};
-template<>
-struct ProtoClass<std::vector<std::string>>
-{
-  using type = ProtoVectorInt;
-};
-
-template<class T>
-class VectorOProtobuf
-{
-  public:
-    VectorOProtobuf(std::ostream & os) : os_(os)
-    {}
-
-    VectorOProtobuf & operator<<(const T & c)
-    {
-      typename ProtoClass<T>::type pc;
-      for (const auto e : c) {
-        pc.add_f1(e);
-      }
-      pc.SerializeToOstream(&os_);
-      return *this;
-    }
-
-  private:
-    std::ostream & os_;
-};
-
-template<class T>
-class VectorIProtobuf
-{
-  public:
-    VectorIProtobuf(std::istream & is) : is_(is)
-    {}
-
-    VectorIProtobuf & operator>>(T & c)
-    {
-      typename ProtoClass<T>::type pc;
-      pc.ParseFromIstream(&is_);
-      const auto & pcv = pc.f1();
-      c.reserve(pc.f1_size());
-      for (int i = 0; i < pcv.size(); ++i) {
-        c.emplace_back(pc.f1()[i]);
-      }
-      return *this;
-    }
-
-  private:
-    std::istream & is_;
-};
-
-////////////////
-// random
-///////////////
-
-template<class T>
-inline void RandomInitT(std::size_t size, std::function<void(T&)>& rand, std::vector<T> & out)
-{
-  out.reserve(size);
-  for (std::size_t i = 0; i < size; ++i) {
-    out.emplace_back();
-    rand(out.back());
-  }
-}
-
-template<class T>
-inline void RandomInit(std::size_t size, std::function<void(std::int32_t&)> rand, std::vector<T> & out)
-{
-  RandomInitT<>(size, rand, out);
-}
-
-template<class T>
-inline void RandomInit(std::size_t size, std::function<void(float&)> rand, std::vector<T> & out)
-{
-  RandomInitT<>(size, rand, out);
-}
-
+#include <boost/serialization/vector.hpp>
+#include "cereal/types/vector.hpp"
 ////////////////
 // benchmark
 ////////////////

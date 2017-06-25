@@ -10,11 +10,7 @@
 #include <limits>
 #define USING_NULLSTREAM 1
 
-#if THREADED_BENCHMARK
-#define THREADED_GBENCHMARK ->Threads(6)
-#else
-#define THREADED_GBENCHMARK
-#endif
+
 
 #if USING_NULLSTREAM
 class NullBuffer : public std::streambuf
@@ -39,6 +35,9 @@ class NullStream : public std::ostream
 #else
 using NullStream = std::stringstream;
 #endif
+
+template <class Cpp>
+struct ProtoClass;
 
 class Random
 {

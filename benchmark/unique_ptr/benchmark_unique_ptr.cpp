@@ -4,7 +4,8 @@
 
 #include "benchmark_unique_ptr.hpp"
 
-#include <memory>
+#include <benchmark/benchmark.h>
+
 #include "benchmark_config.hpp"
 #include "utils.hpp"
 
@@ -19,73 +20,7 @@ static void CustomArguments(benchmark::internal::Benchmark *b)
 }
 
 #undef PARAMS_BENCH_NO_REPEAT_VECT
-#define PARAMS_BENCH_NO_REPEAT_VECT ->ReportAggregatesOnly(true)THREADED_GBENCHMARK->Apply(CustomArguments)
-
-class Node
-{
-  public:
-    void add(std::size_t levels)
-    {
-      if (0 == levels) {
-        return;
-      }
-      --levels;
-      left_ = std::unique_ptr<Node>(new Node);
-      left_->add(levels);
-      right_ = std::unique_ptr<Node>(new Node);
-      right_->add(levels);
-    }
-
-  public:
-    std::unique_ptr<Node> left_;
-    std::unique_ptr<Node> right_;
-};
-
-class Tree
-{
-  public:
-    void add(std::size_t levels)
-    {
-      if (0 == levels) {
-        return;
-      }
-      levels_ = levels;
-      --levels;
-      std::unique_ptr<Node> new_node(new Node);
-      root_ = std::move(new_node);
-      root_->add(levels);
-    }
-
-    std::size_t levels() const
-    {
-      return levels_;
-    }
-
-    std::unique_ptr<Node> root_;
-    std::size_t levels_ = 0;
-};
-
-template<class Archive>
-void serialize(Archive & ar, Node & n, unsigned int/*version*/)
-{
-  ar & n.left_;
-  ar & n.right_;
-}
-
-template<class Archive>
-void serialize(Archive & ar, Tree & l, unsigned int/*version*/)
-{
-  ar & l.root_;
-}
-
-////////////////
-// random
-///////////////
-
-inline void RandomInit(std::size_t size, Tree & out)
-{
-  out.add(size);
-}
+#define PARAMS_BENCH_NO_REPEAT_VECT GBENCHMARK_ITERATIONS->ReportAggregatesOnly(true)THREADED_GBENCHMARK->Apply(CustomArguments)
 
 ////////////////
 // benchmark

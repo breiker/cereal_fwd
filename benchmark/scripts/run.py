@@ -9,7 +9,7 @@ import re
 import multiprocessing
 from multiprocessing import Pool
 from collections import OrderedDict
-
+import sys
 import time
 
 code_base_dir = None
@@ -22,7 +22,7 @@ mean_time_col = "Czas [ns]"
 mean_cpu_col = "CPU [ns]"
 mean_size_col = "Rozmiar [B]"
 max_heap_col = "Max Sterta [B]"
-alloc_count_col = "Liczba Allokacji"
+alloc_count_col = "Liczba Alokacji"
 archive_col = "Archiwum"
 prob_size_col = "Wielkość"
 
@@ -116,23 +116,26 @@ class Benchmark:
         return "Benchmark: %s\n %s" % (self.name, ["- %s\n" % x.__repr__() for x in self.tests])
 
 
-default_cmake = ["cmake", "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_BENCHMARKS=ON", code_base_dir]
 
 
 def slugify(filename):
     return re.sub(r'[^a-zA-Z_0-9]+', '-', filename)
 
 
-def run_cmake(cmake_base):
+def run_cmake(cmake_base, test_heap):
     if not os.path.exists(cmake_base):
         os.makedirs(cmake_base)
     os.chdir(cmake_base)
-    subprocess.call(cmake_base)
+    default_cmake = ["cmake", "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_BENCHMARKS=ON", code_base_dir]
+    if test_heap:
+        default_cmake.append("-DBENCHMARK_SINGLE_ITERATION=1")
+    print(default_cmake)
+    subprocess.call(default_cmake)
 
 
-def run_make(cmake_base):
+def run_make(cmake_base, target):
     os.chdir(cmake_base)
-    subprocess.call(["make", "-j6", "VERBOSE=1", "benchmarks"])
+    subprocess.call(["make", "-j6", "VERBOSE=1", target])
 
 
 benchmarks = []
@@ -285,6 +288,10 @@ def new_frame(row):
     )
 
 
+def strip_iterations_from_name(name):
+    return re.sub(r'/iterations:[0-9]+', r'', name)
+
+
 def read_bench_output(directory, heap_file, output):
     dfs = []
     for file in os.listdir(directory):
@@ -298,7 +305,12 @@ def read_bench_output(directory, heap_file, output):
     out_df['HasMean'] = out_df.apply(lambda row: is_mean(row), axis=1)
     out_df['StdDevReal'] = out_df.apply(lambda row: attach_stddev(row, out_df, 'real_time'), axis=1)
     out_df['StdDevCpu'] = out_df.apply(lambda row: attach_stddev(row, out_df, 'cpu_time'), axis=1)
+
+    # heap data manipulation
     heap_df = pd.read_csv(heap_file, index_col=0)
+    heap_df['Benchmark'] = heap_df['Benchmark'].apply(strip_iterations_from_name)
+    heap_df.to_csv(output + "_heap_dirty.csv")
+
     out_df = out_df.merge(heap_df, how='outer', on="Benchmark")
 
     # print(out_df)
@@ -451,28 +463,57 @@ def change_columns_latex(columns):
         elif " X" in column:
             out.append("$\div$")
         elif "Sterta" in column:
-            out.append("Sterta[B]")
+            out.append("Sterta")
         elif "Rozmiar" in column:
-            out.append("Rozmiar[B]")
+            out.append("R")
         elif "Czas [ns]" in column:
-            out.append("Czas[ns]")
-        elif "Liczba Allokacji" in column:
-            out.append("Allokacje")
+            out.append("Czas")
+        elif alloc_count_col in column:
+            out.append("Alok.")
         elif "Wielkość" in column:
             out.append("N")
+        elif "Archiwum" in column:
+            out.append("A")
         else:
             out.append(column)
     return out
 
 
-def change_second_column(df, parbox):
+def change_second_column_for_split(df, parbox):
     if parbox:
         df["Archiwum"] = df["Archiwum"].apply(lambda x:
                                               re.sub(r'(^.*$)', r'\\parbox{1.5cm}{\1}',
                                                      re.sub(r'(\w+)', r'\\makebox{\1}', x)
-                                                     ))
+                                                     )[0])
     else:
         df["Archiwum"] = df["Archiwum"].apply(lambda x: re.sub(r'(\w+)', r'\\makebox{\1}', x))
+    return df
+
+def change_second_column_for_split(df, parbox):
+    if parbox:
+        # with multirow we don't need p{1.5cm}
+        df["Archiwum"] = df["Archiwum"].apply(lambda x:
+                                              re.sub(r'(^.*$)', r'\\parbox{1.5cm}{\1}',
+                                                     re.sub(r'(\w+)', r'\\makebox{\1}', x)
+                                                     )[0])
+    else:
+        df["Archiwum"] = df["Archiwum"].apply(lambda x: re.sub(r'(\w+)', r'\\makebox{\1}', x))
+    return df
+
+
+def shorten_data_in_columns(df):
+    for column in df.columns:
+        if column == "Archiwum":
+            df[column] = df[column].apply(lambda x: re.sub(r'(\w)\w+\W*', r'\1', x))
+        elif column == mean_time_col or column == mean_cpu_col:
+            df[column] = df[column].apply(lambda x: int(round(x)))
+        elif column == mean_size_col:
+            df[column] = df[column].apply(lambda x: int(round(x)) if isinstance(x, float) and not pd.isnull(x) else x)
+        elif column == max_heap_col:
+            df[column] = df[column].apply(lambda x: str(int(round(x / 1000))) + "k" if x >= 10 ** 3 else x)
+        elif column == alloc_count_col:
+            df[column] = df[column].apply(lambda x: format_float(x/1000) + "k" if x >= 10**3 else x)
+
     return df
 
 
@@ -485,12 +526,27 @@ def move_columns_to_end(df, columns):
     return df.reindex(columns=o_cols)
 
 
-def drop_columns(df, columns):
+def latex_drop_columns(df, columns):
     o_cols = df.columns.tolist()
     for column in columns:
         o_cols.pop(o_cols.index(column))
 
     return df.reindex(columns=o_cols)
+
+
+def latex_drop_rows(df):
+    if prob_size_col not in df:
+        return df
+    uniques = df[prob_size_col].unique()
+    print("Uniques %s" % uniques)
+    take = [uniques[0],
+            uniques[len(uniques) // 2],
+            uniques[len(uniques) - 1]
+            ]
+    if len(uniques) >= 10:
+        take.insert(1, uniques[1])
+    df = df[df[prob_size_col].isin(take)]
+    return df
 
 
 def gen_latex(df, directory):
@@ -499,18 +555,23 @@ def gen_latex(df, directory):
         tmp_df = drop_n_unique(name[1])
         filename = os.path.join(directory, name[0] + "_table.tex")
         # tmp_df = move_columns_to_end(tmp_df, ["CPU [ns]", "σ CPU", "σ Czasu"])
-        tmp_df = drop_columns(tmp_df, ["CPU [ns]", "σ CPU", "σ Czasu"])
-        tmp_df.columns = change_columns_latex(tmp_df.columns)
+        tmp_df = latex_drop_columns(tmp_df, ["CPU [ns]", "σ CPU", "σ Czasu"])
         sort_cols = (["Op", "Archiwum"], [0, 1])
-        if "N" in tmp_df:
-            sort_cols[0].append("N")
+        if "Wielkość" in tmp_df:
+            sort_cols[0].append("Wielkość")
             sort_cols[1].append(1)
-            tab_format = None
+            tab_format = "lll|" + "rl" * ((tmp_df.shape[1] - 3) // 2)
         else:
-            tab_format = "lp{1.6cm}" + "r" * (tmp_df.shape[1] - 2)
+            tab_format = "ll|" + "rl" * ((tmp_df.shape[1] - 2) // 2)  # "lp{1.6cm}" + "r" * (tmp_df.shape[1] - 2)
         tmp_df = tmp_df.sort_values(sort_cols[0], ascending=sort_cols[1])
-        tmp_df = change_second_column(tmp_df, "N" in tmp_df)
+        # tmp_df = change_second_column_for_split(tmp_df, "N" in tmp_df)
+        tmp_df = shorten_data_in_columns(tmp_df)
+        tmp_df = latex_drop_rows(tmp_df)
         tmp_df = tmp_df.set_index(sort_cols[0])
+        # After this line name of columns is changed
+        tmp_df.columns = change_columns_latex(tmp_df.columns)
+        tmp_df.index.names = change_columns_latex(tmp_df.index.names)
+
         tmp_df.to_latex(filename, float_format=format_float,
                         index=True, escape=False, longtable=False,
                         sparsify=True, multirow=True, column_format=tab_format)
@@ -533,9 +594,68 @@ def generate_all(df, directory):
     f_dfs.to_csv(os.path.join(directory, "all_new_2.csv"), float_format="%0.2f")
 
     # now plots
-    gen_plots(f_dfs, directory)
-    gen_plots2(f_dfs, directory)
+    # gen_plots(f_dfs, directory)
+    # gen_plots2(f_dfs, directory)
     gen_latex(f_dfs, directory)
+
+def archive_cmake_size_mapping(archive):
+    if "cereal_binary" in archive:
+        return "Cereal Binary"
+    elif "cereal_extendable" in archive:
+        return "Cereal Extendable"
+    elif "boost" in archive:
+            return "Boost Binary"
+    elif "protobuf" in archive:
+        return "Protocol Buffers"
+    else:
+        print("Unknown is %s" % archive)
+        return "Unknown"
+
+def test_cmake_size_mapping(test):
+    if "integer_class" in test:
+        return "IntegerClass, IntegerClassVect"
+    elif "map" in test:
+        return "Mapy"
+    elif "polymorphic" in test:
+        return "Wsk. polimorficzne"
+    elif "shared_ptr" in test:
+        return "Wsk. współdzielone"
+    elif "vector" in test:
+        return "Tablice"
+    elif "unique_ptr" in test:
+        return "Wsk. unikalne"
+    else:
+        return "Unknown"
+
+
+def read_exe_sizes(dir):
+    rows = []
+    size_dir = os.path.join(dir, "size")
+    for file in os.listdir(size_dir):
+        if not "size_benchmark" in file:
+            continue
+        name_split_g = re.search(r'size_benchmark_([a-z_]+)-([a-z_]+)', file)
+        row = [
+            ("Zbiór testów", test_cmake_size_mapping(name_split_g[1])),
+            ("Biblioteka", archive_cmake_size_mapping(name_split_g[2])),
+            ("Rozmiar [KB]", os.path.getsize(os.path.join(size_dir, file))/1024)
+            ]
+        name_split = pd.Series(OrderedDict(row))
+        # print(name_split)
+        rows.append(name_split)
+    df = pd.DataFrame(rows)
+    df.sort_values(["Zbiór testów", "Biblioteka"], inplace=True)
+    df.set_index(["Zbiór testów", "Biblioteka"], inplace=True)
+    return df
+
+
+
+def generate_size_table(cmake_dir_, output_dir_):
+    df = read_exe_sizes(cmake_dir_)
+    print(df)
+    df.to_latex(os.path.join(output_dir_, "sizes.tex"), float_format=format_float,
+                    index=True, escape=False, longtable=False,
+                    sparsify=True, multirow=True)  # output_file_base
 
 
 parser = argparse.ArgumentParser()
@@ -543,9 +663,12 @@ parser.add_argument("--output_dir", help="output directory", type=str, required=
 parser.add_argument("--data_dir", help="directory with data; output dir from last run with --heap and --bench",
                     type=str, required=True)
 parser.add_argument("-c", "--cmake_dir", help="cmake directory; by default output_dir/cmake", type=str)
+parser.add_argument("--code_dir", help="base directory for cereal", type=str)
 parser.add_argument("--heap", help="generate heap profile; in output directory heap.csv will be created",
                     action="store_true")
 parser.add_argument("-b", "--bench", help="generate benchmark output", action="store_true")
+parser.add_argument("--gen_sizes", help="generate size data", action="store_true")
+
 parser.add_argument("-r", "--read", help="read benchmark output", action="store_true")
 parser.add_argument("--skip_build", help="skip running cmake and make", action="store_true", default=False)
 
@@ -560,9 +683,22 @@ if __name__ == '__main__':
         cmake_dir = os.path.join(output_dir, "cmake")
 
     if not args.skip_build:
-        run_make(cmake_dir)
+        if not args.code_dir:
+            print("code_dir is needed. Use --skip_build or provide directory to source code")
+            sys.exit(1)
+        if not os.path.exists(args.code_dir):
+            print("code_dir has to be valid path: %s" % args.code_dir)
+            sys.exit(1)
+        code_base_dir = args.code_dir
+        run_cmake(cmake_dir, args.heap)
+        run_make(cmake_dir, "benchmarks")
         generate_benchmarks()
-
+    if args.gen_sizes:
+        if args.skip_build:
+            print("calling skip build and gen_sizes is not supported")
+            sys.exit(1)
+        run_make(cmake_dir, "size_benchmark")
+        generate_size_table(cmake_dir, os.path.join(output_dir, "output"))
     if args.heap:
         test_heap(cmake_dir, "heap")
 
