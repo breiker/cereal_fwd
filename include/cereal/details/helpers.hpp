@@ -591,8 +591,12 @@ namespace cereal
 
       std::uint32_t find( std::size_t hash, std::uint32_t version )
       {
-        const auto result = mapping.emplace( hash, version );
-        return result.first->second;
+        const auto found = mapping.find(hash);
+        if (mapping.end() != found) {
+          return found->second;
+        } else {
+          return mapping.emplace( hash, version ).first->second;
+        }
       }
     }; // struct Versions
   } // namespace detail
