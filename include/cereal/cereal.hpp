@@ -545,7 +545,10 @@ namespace cereal
       template <class T> inline typename
       std::uint32_t registerClassVersionImpl(std::true_type)
       {
-        const auto version = detail::Version<T>::version;
+        static const auto hash = std::type_index(typeid(T)).hash_code();
+        const auto lock = detail::StaticObject<detail::Versions>::lock();
+        const auto version =
+            detail::StaticObject<detail::Versions>::getInstance().find( hash, detail::Version<T>::version );
         process( make_nvp<ArchiveType>("cereal_class_version", detail::VersionIdTag<T>(version)) );
         return version;
       }
