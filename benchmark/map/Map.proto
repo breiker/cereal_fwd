@@ -4,7 +4,3 @@ syntax = "proto3";
 message ProtoMapInt {
     map<sint32, sint32> f1 = 1;
 }
-
-message ProtoMapString {
-    map<string, string> f1 = 1;
-}

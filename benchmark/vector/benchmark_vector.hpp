@@ -15,7 +15,6 @@
 /////////////////////////
 class ProtoVectorInt;
 class ProtoVectorFloat;
-class ProtoVectorString;
 
 template<>
 struct ProtoClass<std::vector<std::int32_t>>
@@ -27,11 +26,7 @@ struct ProtoClass<std::vector<float>>
 {
   using type = ProtoVectorFloat;
 };
-template<>
-struct ProtoClass<std::vector<std::string>>
-{
-  using type = ProtoVectorString;
-};
+
 
 template<class T>
 class VectorOProtobuf

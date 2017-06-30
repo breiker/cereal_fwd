@@ -18,18 +18,13 @@
 // Protobuf adapters
 /////////////////////////
 class ProtoMapInt;
-class ProtoMapString;
 
 template<>
 struct ProtoClass<std::map<std::int32_t, std::int32_t>>
 {
   using type = ProtoMapInt;
 };
-template<>
-struct ProtoClass<std::map<std::string, std::string>>
-{
-  using type = ProtoMapString;
-};
+
 
 template<class T>
 class MapOProtobuf
