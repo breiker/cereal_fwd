@@ -298,7 +298,7 @@ namespace cereal
       the transformation is necessary, but causes no performance hit if swapping is not necessary.
 
 
-      The archive will save all integer values as variadic integegers. Exception () will be thrown when on deserialization
+      The archive will save all integer values as variadic integers. Exception will be thrown when on deserialization
       value will be bigger than can be stored to target field. It is still recommended to use fixed size integers.
 
       When using a binary archive and a file stream, you must use the
