@@ -1,84 +1,273 @@
-cereal - A C++11 library for serialization
-==========================================
+Preface
+=======
 
-<img src="http://uscilab.github.io/cereal/assets/img/cerealboxside.png" align="right"/><p>cereal is a header-only C++11 serialization library.  cereal takes arbitrary data types and reversibly turns them into different representations, such as compact binary encodings, XML, or JSON.  cereal was designed to be fast, light-weight, and easy to extend - it has no external dependencies and can be easily bundled with other code or used standalone.</p>
+Library is under active developement and parts of it may change.
 
-### cereal has great documentation
+This documentation is intended as an extension to official cereal
+documentation available at <http://uscilab.github.io/cereal/index.html>.
 
-Looking for more information on how cereal works and its documentation?  Visit [cereal's web page](http://USCiLab.github.com/cereal) to get the latest information.
+Introduction
+============
 
-### cereal is easy to use
+This documents describes modification made to cereal library to support
+forward compatibility and portability between different platforms.\
+Modifications were focused on binary format for which new ExtendableBinary archive
+was made.\
+Unless specified otherwise information applies to ExtendableBinary
+archive, not necessarily to other archives.\
 
-Installation and use of of cereal is fully documented on the [main web page](http://USCiLab.github.com/cereal), but this is a quick and dirty version:
+Main goals
+----------
 
-* Download cereal and place the headers somewhere your code can see them
-* Write serialization functions for your custom types or use the built in support for the standard library cereal provides
-* Use the serialization archives to load and save data
+-   Support backward[^1] and forward[^2] compatibility.
 
-```cpp
-#include <cereal/types/unordered_map.hpp>
-#include <cereal/types/memory.hpp>
-#include <cereal/archives/binary.hpp>
-#include <fstream>
-    
-struct MyRecord
-{
-  uint8_t x, y;
-  float z;
-  
-  template <class Archive>
-  void serialize( Archive & ar )
-  {
-    ar( x, y, z );
-  }
-};
-    
-struct SomeData
-{
-  int32_t id;
-  std::shared_ptr<std::unordered_map<uint32_t, MyRecord>> data;
-  
-  template <class Archive>
-  void save( Archive & ar ) const
-  {
-    ar( data );
-  }
-      
-  template <class Archive>
-  void load( Archive & ar )
-  {
-    static int32_t idGen = 0;
-    id = idGen++;
-    ar( data );
-  }
-};
+-   Minimal size of saved data without hindering ability to evolve
+    structure of serialized data.
 
-int main()
-{
-  std::ofstream os("out.cereal", std::ios::binary);
-  cereal::BinaryOutputArchive archive( os );
+-   Support streaming when saving and loading.
 
-  SomeData myData;
-  archive( myData );
+-   Minimize allocations during saving and loading process.
 
-  return 0;
-}
-```    
+-   Support portability between different platforms.
 
-### cereal has a mailing list
+-   Don’t break compatibility for existing archives in library.
 
-Either get in touch over <a href="mailto:cerealcpp@googlegroups.com">email</a> or [on the web](https://groups.google.com/forum/#!forum/cerealcpp).
+-   Loading data from unknown source cannot result in undefined behavior
+    (e.g. crash).
+
+Backward and forward compatibility
+----------------------------------
+
+Backward compatibility is already supported for all archives in cereal
+(see “Explicit versioning” in
+<http://uscilab.github.io/cereal/serialization_functions.html>). Forward
+compatibility support was added to ExtendableBinary archive.
+
+Portability
+-----------
+
+There are two main problems with making archive portable between
+platforms — endianness and size of integers.
+
+ExtendableBinary archive, similarly to PortableBinary archive, saves
+byte order at the beginning of stream. If platform used for reading has
+the same byte order data is read as is. Otherwise, archive swaps bytes
+for each primitive type. This results in slight run-time overhead.
+
+Additionally, size of integer for not fixed size integers may differ
+between platforms. Saving types such as *std::size\_t* or *long* may
+produce data which may not be readable on other platforms. In
+ExtendableBinary archive all integers used as fields are saved with size
+information connected to them. This makes it possible to load integers
+which have different size on writing and reading side. Loading integer
+that cannot fit into type used for loading will result in exception. For
+space saving purposes size of saved integer is determined as minimal
+number of bytes needed to represent stored number.\
+Note that above optimizations are not used when handing arrays of binary
+data (e.g. vector or array of integers). Fixed size integers should be
+preferred for types used for such situations.
+
+Added features
+==============
+
+Omit field tag
+--------------
+
+During class evolution it may be decided that some fields are no longer
+used and don’t have to be saved or loaded. Saving them would make
+unnecessary space and run-time overhead. Some archives requires
+preservation of serialized field order to work. That is why simply
+deleting serialization of field may not be the best solution. For that
+situation *OmittedFieldTag* was introduced. It is intended to be used as
+indication that, in this position, there used to be a field but will not
+be saved and loaded anymore.
+
+Loading field which was saved with *OmittedFieldTag* doesn’t result in
+exception. Field is not loaded and serialize function is not called.\
+Field which was serialized but is loaded with *OmittedFieldTag* makes
+archive skip saved data for that field and prepares archive for loading
+next field.
+
+Use of *OmittedFieldTag* makes saving fields optional. To allow checking
+if field was saved *Archive::wasSerialied* method is introduced. Return
+value of that method indicates if field was saved to archive or
+*OmittedFieldTag* was used.
+
+Possible return value can be seen in table below:\
+T - type is written/read\
+O - OmittedFieldTag is used\
 
 
+  |Writing side   |Reading side   |Return value|
+  |-------------- |-------------- |------------|
+  |T              |T              |true        |
+  |O              |O              |false       |
+  |T              |O              |true        |
+  |O              |T              |false       |
 
-## cereal has a permissive license
+As an example struct *A* seen below has field *b* which is not longer
+needed. In new version it is possible to mark field serialized as second
+with *OmittedFieldTag*.
 
-cereal is licensed under the [BSD license](http://opensource.org/licenses/BSD-3-Clause).
+    // old version
+      struct A {
+        int a;
+        B b; // type is irrelevant here
+        float c;
+        template <class Archive>
+        void serialize(Archive& ar, std::uint32_t version)
+        {
+          ar(a);
+          ar(b);
+          ar(c);
+        }
+      };
+    // new version
+      struct A {
+        int a;
+        float c;
+        template <class Archive>
+        void serialize(Archive& ar, std::uint32_t version)
+        {
+          ar(a);
+          // b field is no longer used
+          ar(cereal::OmittedFieldTag());
+          ar(c);
+        }
+      };
 
-## cereal build status
+Archive’s *wasSerialized* method can be used to check if field *b* was
+serialized.
 
-* develop : [![Build Status](https://travis-ci.org/USCiLab/cereal.png?branch=develop)](https://travis-ci.org/USCiLab/cereal)
+    template<class Archive>
+    void serialize(Archive& ar, std::uint32_t version)
+    {
+      ar(a);
+      ar(b);
+      if(ar.wasSerialized())
+        std::cout << "field b was serialized\n";
+      else
+        std::cout << "field b was not serialized\n";
+      ar(c);
+    }
 
----
+Shared pointer reading
+----------------------
 
-Were you looking for the Haskell cereal?  Go <a href="https://github.com/GaloisInc/cereal">here</a>.
+Data for shared pointers pointing to the same address is saved only once
+(<http://uscilab.github.io/cereal/pointers.html>). Supporting forward
+compatibility requires ability to skip loading of fields which are not
+known or not used in that version. As a result, data which is defined
+once but not used has to available for later usage in case same shared
+pointer may be loaded later.\
+In ExtendableBinary archive data for skipped shared pointers is copied
+into memory buffer for later usage. Moving back in stream is not an
+option since that would break streaming support. Please note that in
+worst case scenario size of in memory buffer can be close to original
+size of archive.
+
+Class evolution
+===============
+
+Example
+-------
+
+    class A {
+      int a;
+      float b;
+
+      template<class Archive>
+      void serialize(Archive& ar, std::uint32_t version)
+      {
+        ar(a, b);
+      }
+    };
+
+    class A {
+      int a;
+      float b;
+      C c;
+
+      template<class Archive>
+      void serialize(Archive& ar, std::uint32_t version)
+      {
+        ar(a, b);
+        if(version >= 1)
+          ar(c);
+      }
+    };
+    CEREAL_CLASS_VERSION( A, 1 );
+
+Example above shows class *A* which in old version has two fields, *a*
+and *b*. After some time new field, *c*, is added. Adding new field to
+serialization requires:
+
+-   Updating class version with CEREAL\_CLASS\_VERSION.
+
+-   Adding field to serialization function conditionally on version
+    passed in parameter.
+
+Conditionally loading field guarantees that field will be loaded only
+when it was actually saved.\
+Loading new version with code supporting only old version will result in
+loading *a* and *b* fields. Unknown fields at the end of class will be
+skipped, in this situation *c* field.
+
+Permitted changes
+-----------------
+
+-   Not loading fields from the end of class/struct is permitted.
+
+-   Adding new fields at the end of serialization code. New fields have
+    to be loaded conditionally on class version saved to archive.
+
+-   Changing size of integers; if values saved with older version were
+    never bigger than can be stored in new size. Loading integer bigger
+    than can be stored in field used for loading results in exception.
+
+-   Swapping structs or classes to different types serialized in the
+    same way.
+
+    -   Field cannot be saved as shared pointer.
+
+    -   Field cannot be saved as pointer to base class.
+
+-   Changing type of serialized field to *OmittedFieldTag*.
+
+    -   Changing field to OmittedFieldTag can be done even without
+        changing class version and saving it conditionally on class
+        version.
+
+-   Changing serialize function from variant without *version* parameter
+    to variant with one. (Contrary to “Explicit versioning” -
+    <http://uscilab.github.io/cereal/serialization_functions.html>)
+
+Forbidden changes
+-----------------
+
+-   Trying to load more fields than were saved will result in exception.
+
+-   Changing sign of integer and loading number that doesn’t fit into
+    new type e.g. loading negative number to unsigned type.
+
+-   Changing size of floating point types (float, double).
+
+-   Changing order in which fields are serialized.
+
+-   Adding field for serialization without updating class version and
+    loading it without checking version.
+
+-   Adding field for serialization not as the last field.
+
+
+Planned changes
+===============
+
+-   Saving vectors with arithmetic types and strings can be handled in
+    more efficient way.
+
+-   More testing on big endian platform.
+
+[^1]: <https://en.wikipedia.org/wiki/Backward_compatibility>
+
+[^2]: <https://en.wikipedia.org/wiki/Forward_compatibility>
