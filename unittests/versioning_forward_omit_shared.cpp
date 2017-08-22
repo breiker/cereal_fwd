@@ -64,10 +64,6 @@ struct PointerStruct
 
   int y;
 };
-/*template<class T> inline
-typename std::enable_if<std::is_same<T, std::shared_ptr<PointerStruct>>::value, T>::type
-random_value(std::mt19937 & gen)
-{ return std::make_shared<T>(PointerStruct(random_value<int>(gen))); }*/
 
 template<class T> inline
 typename std::enable_if<std::is_same<T, PointerStruct>::value, T>::type
@@ -279,7 +275,10 @@ struct C {
   {
     ar(toD);
   }
-  bool operator==(const C& other) const { return (*toD) == (*other.toD); }
+  bool operator==(const C& other) const {
+    return (toD != nullptr && other.toD != nullptr && (*toD) == (*other.toD)) ||
+        (toD == nullptr && other.toD == nullptr);
+  }
 };
 struct E {
   int e;
@@ -339,7 +338,7 @@ struct ANew {
   }
 };
 template <class IArchive, class OArchive>
-void test_omited_shared_out_of_order()
+void test_omited_shared_out_of_order(typename IArchive::Options const & iOptions = typename IArchive::Options() )
 {
 
   std::random_device rd;
@@ -361,19 +360,19 @@ void test_omited_shared_out_of_order()
 
     std::istringstream is(os.str());
     {
-      IArchive iar(is);
+      IArchive iar(is, iOptions);
       iar( i_struct );
     }
 
     BOOST_CHECK_EQUAL(o_struct.b.b, i_struct.b.b);
     BOOST_CHECK_EQUAL(o_struct.e.e, i_struct.e.e);
     BOOST_CHECK(*(o_struct.e.toD) == *(i_struct.e.toD));
+    BOOST_CHECK(o_struct.e.toC != nullptr);
+    BOOST_CHECK(i_struct.e.toC != nullptr);
     BOOST_CHECK(*(o_struct.e.toC) == *(i_struct.e.toC));
     BOOST_CHECK(*(o_struct.b.toC) == *(i_struct.e.toC));
     BOOST_CHECK(*(o_struct.b.toC->toD) == *(i_struct.e.toD));
     BOOST_CHECK_EQUAL(i_struct.e.toC->toD, i_struct.e.toD); // address
-
-
   }
 }
 
@@ -383,6 +382,19 @@ CEREAL_CLASS_VERSION( ANew, 1 )
 BOOST_AUTO_TEST_CASE( extendable_binary_omited_shared_out_of_order )
 {
   test_omited_shared_out_of_order<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>();
+}
+
+BOOST_AUTO_TEST_CASE(extendable_binary_omited_shared_out_of_order_limit_size)
+{
+  auto funComma = []() {
+    test_omited_shared_out_of_order<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>(
+        cereal::ExtendableBinaryInputArchive::Options().maxSharedBufferSize(5));
+  };
+  BOOST_CHECK_THROW(
+      funComma(),
+      cereal::Exception
+  );
+
 }
 
 struct Version0
