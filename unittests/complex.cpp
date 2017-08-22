@@ -32,16 +32,17 @@ void test_complex()
 {
   std::random_device rd;
   std::mt19937 gen(rd());
+  using longdouble = typename cereal::longdouble<IArchive>::type;
 
   auto rngF = [&](){ return random_value<float>(gen); };
   auto rngD = [&](){ return random_value<double>(gen); };
-  auto rngLD = [&](){ return random_value<long double>(gen); };
+  auto rngLD = [&](){ return random_value<longdouble>(gen); };
 
   for(int ii=0; ii<100; ++ii)
   {
     std::complex<float> o_float( rngF(), rngF() );
     std::complex<double> o_double( rngD(), rngD() );
-    std::complex<long double> o_ldouble( rngLD(), rngLD() );
+    std::complex<longdouble> o_ldouble( rngLD(), rngLD() );
 
     std::ostringstream os;
     {
@@ -54,7 +55,7 @@ void test_complex()
 
     std::complex<float> i_float;
     std::complex<double> i_double;
-    std::complex<long double> i_ldouble;
+    std::complex<longdouble> i_ldouble;
 
     std::istringstream is(os.str());
     {

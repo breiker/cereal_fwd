@@ -32,6 +32,7 @@ void test_pod()
 {
   std::random_device rd;
   std::mt19937 gen(rd());
+  using longdouble = typename cereal::longdouble<IArchive>::type;
 
   for(size_t i=0; i<100; ++i)
   {
@@ -49,7 +50,7 @@ void test_pod()
     float         const o_float  = random_value<float>(gen);
     double        const o_double = random_value<double>(gen);
 
-    long double const o_long_double = random_value<long double>(gen);
+    longdouble const o_long_double = random_value<longdouble>(gen);
     long const o_long = random_value<long>(gen);
     unsigned long const o_ulong = random_value<unsigned long>(gen);
     long long const o_long_long = random_value<long long>(gen);
@@ -92,7 +93,7 @@ void test_pod()
     float         i_float                      = 0;
     double        i_double                     = 0;
 
-    long double i_long_double       = 0;
+    longdouble i_long_double       = 0;
     long i_long                     = 0;
     unsigned long i_ulong           = 0;
     long long i_long_long           = 0;
