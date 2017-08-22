@@ -285,6 +285,7 @@ BOOST_AUTO_TEST_CASE( xml_forward_support_extended )
 {
   test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, int>();
   test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, float>();
+  test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, double>();
   test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, bool>();
   test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, std::uint8_t>();
   test_forward_support_extended<cereal::XMLInputArchive, cereal::XMLOutputArchive, std::uint16_t>();
@@ -298,6 +299,7 @@ BOOST_AUTO_TEST_CASE( json_forward_support_extended )
 {
   test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, int>();
   test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, float>();
+  test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, double>();
   test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, bool>();
   test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, std::uint8_t>();
   test_forward_support_extended<cereal::JSONInputArchive, cereal::JSONOutputArchive, std::uint16_t>();
@@ -311,6 +313,7 @@ BOOST_AUTO_TEST_CASE( extendable_binary_forward_support_extended )
 {
   test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, int>();
   test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, float>();
+  test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, double>();
   test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, bool>();
   test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, std::uint8_t>();
   test_forward_support_extended<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive, std::uint16_t>();
@@ -338,6 +341,7 @@ BOOST_AUTO_TEST_CASE( portable_binary_forward_support_extended )
 #define CEREAL_MACRO_COMMA ,
 CEREAL_CLASS_VERSION( InnerNew<int>, 1 )
 CEREAL_CLASS_VERSION( InnerNew<float>, 1 )
+CEREAL_CLASS_VERSION( InnerNew<double>, 1 )
 CEREAL_CLASS_VERSION( InnerNew<bool>, 1 )
 CEREAL_CLASS_VERSION( InnerNew<std::uint8_t>, 1 )
 CEREAL_CLASS_VERSION( InnerNew<std::uint16_t>, 1 )
