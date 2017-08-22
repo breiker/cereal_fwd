@@ -16,7 +16,10 @@ endif()
 
 
 if(NOT MSVC)
-    set(CMAKE_CXX_FLAGS "-Wall -Werror -Wno-error=implicit-fallthrough -g -Wextra -Wshadow -pedantic ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS "-Wall -Werror -g -Wextra -Wshadow -pedantic ${CMAKE_CXX_FLAGS}")
+    if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 5)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=implicit-fallthrough ")
+    endif()
     if(CMAKE_VERSION VERSION_LESS 3.1)
         set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
     else()
