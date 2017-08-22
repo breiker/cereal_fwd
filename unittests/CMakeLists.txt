@@ -15,6 +15,11 @@ if((${CMAKE_SIZEOF_VOID_P} EQUAL 8) AND (NOT SKIP_PORTABILITY_TEST))
 
 endif()
 
+set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/portability_golden.cpp
+        APPEND PROPERTY COMPILE_DEFINITIONS
+        GOLDEN_TEST_DATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/testdata"
+        )
+
 # Build all of the non-special tests and link against the boost unit test framework
 foreach(TEST_SOURCE ${TESTS})
 

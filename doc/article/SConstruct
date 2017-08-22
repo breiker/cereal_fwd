@@ -1,0 +1,10 @@
+# -*- mode: Python; -*-
+import os
+import SCons.Builder
+
+env = Environment(ENV=os.environ)
+outpdf = env.PDF(target = 'breiter_cereal.pdf', source='breiter_cereal.tex')
+Depends(outpdf,['bib/references.bib'])
+
+env.Clean('.','.sconsign.dblite')
+
