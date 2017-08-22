@@ -220,6 +220,13 @@ namespace cereal
       return binding->second;
     }
 
+    //! Returns if given name was registered for polymorphic loading
+    template <class Archive> inline
+    bool hasPolymorphicBinding(const std::string& name) {
+      auto const & bindingMap = detail::StaticObject<detail::InputBindingMap<Archive>>::getInstance().map;
+      return bindingMap.end() != bindingMap.find(name);
+    }
+
     //! Serialize a shared_ptr if the 2nd msb in the nameid is set, and if we can actually construct the pointee
     /*! This check lets us try and skip doing polymorphic machinery if we can get away with
         using the derived class serialize function
