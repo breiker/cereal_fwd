@@ -116,10 +116,6 @@ namespace cereal
       l = static_cast<ClassMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
       return l;
     }
-    ClassMarkers operator|(ClassMarkers l, ClassMarkers r)
-    {
-      return static_cast<ClassMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
-    }
     std::uint8_t operator&(ClassMarkers l, ClassMarkers r)
     {
       return static_cast<std::uint8_t>(l) & static_cast<std::uint8_t>(r);
@@ -145,10 +141,6 @@ namespace cereal
     {
       l = static_cast<PointerMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
       return l;
-    }
-    PointerMarkers operator|(PointerMarkers l, PointerMarkers r)
-    {
-      return static_cast<PointerMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
     }
     std::uint8_t operator&(PointerMarkers l, PointerMarkers r)
     {
