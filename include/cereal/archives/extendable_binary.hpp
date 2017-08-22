@@ -217,7 +217,7 @@ namespace cereal
         }
       }
 
-      //! Writes object properites to stream. Called in prologue for objects
+      //! Writes object properties to stream. Called in prologue for objects
       void saveObjectEnd()
       {
         if(objectDataNeedsSaving) {
@@ -505,8 +505,7 @@ namespace cereal
 
       //! Gets last type tag from input stream
       /*! @tparam expected_type type which is expected to be loaded
-          Doesn't throw exception on type different than expected_type @see getTypeTag
-          TODO varargs, template argument is unusd now */
+          Doesn't throw exception on type different than expected_type @see getTypeTag */
       template <extendable_binary_detail::FieldType expected_type>
       inline auto getTypeTagNoError() -> decltype(extendable_binary_detail::readType(std::uint8_t{}))
       {
@@ -850,9 +849,6 @@ namespace cereal
                 if(objectIdTmp & detail::msb_32bit) {
                   pushSaveShared(objectIdTmp & ~detail::msb_32bit, class_depth);
                 }
-//                throw Exception("not implemented skipped shared ptr");
-                /* Only loading non registered shared pointer is not supported so don't throw exception here.
-                 * Only temporary */
               }
               if(markers & PointerMarkers::IsPolymorphicPointer) {
                 loadBinary<sizeof(std::int32_t)>(&polymorphicId, sizeof(std::int32_t));
@@ -910,7 +906,7 @@ namespace cereal
                            }));
       }
 
-      /* Called at the end of shared object loading */
+      /** Called at the end of shared object loading */
       inline bool isSkippedSharedObjectEnd(int classDepth)
       {
         return false == savedShared.saving.empty()
@@ -1329,8 +1325,6 @@ namespace cereal
   struct is_extendablebinary_empty_prologue_and_epilogue1<SizeTag<T>> : std::true_type {};
   template <class T>
   struct is_extendablebinary_empty_prologue_and_epilogue1<BinaryData<T>> : std::true_type {};
-  // TODO for input archive cache size, and store it specially for BinaryData
-  // TODO move to traits namespace
 
   //! Prologue for arithmetic types for ExtendableBinary archives
   template <class T, traits::EnableIf<is_extendablebinary_empty_prologue_and_epilogue1<T>::value> = traits::sfinae> inline
@@ -1373,8 +1367,6 @@ namespace cereal
 // TODO change shared_ptr saving to separate function
   template <class T>
   struct is_extendablebinary_internal_prologue_and_epilogue1<memory_detail::PtrWrapper<T>> : std::true_type {};
-  // TODO change for pointers
-  // TODO move to traits namespace
   template <class T>
   struct is_extendablebinary_internal_prologue_and_epilogue1<detail::VersionIdTag<T>> : std::true_type {};
   template <class T>
@@ -1508,11 +1500,11 @@ CEREAL_SETUP_ARCHIVE_TRAITS(cereal::ExtendableBinaryInputArchive, cereal::Extend
 
 namespace cereal { namespace traits {
 
-template<>
+template <>
 struct wrap_polymorphic_weak_ptr<cereal::ExtendableBinaryOutputArchive> : std::false_type
 { };
 
-template<>
+template <>
 struct wrap_polymorphic_weak_ptr<cereal::ExtendableBinaryInputArchive> : std::false_type
 { };
 
