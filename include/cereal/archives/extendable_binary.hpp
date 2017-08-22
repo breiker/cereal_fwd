@@ -986,23 +986,16 @@ namespace cereal
     static_assert( !std::is_floating_point<T>::value ||
                    (std::is_floating_point<T>::value && std::numeric_limits<T>::is_iec559),
                    "Extendable binary only supports IEEE 754 standardized floating point" );
-    static_assert((sizeof(t) == 4) || (sizeof(t) == 8) || (sizeof(t) == 16), "unsupported float size");
     using namespace extendable_binary_detail;
-    std::uint8_t floatSize;
-    switch(sizeof(t)) {
-      case 4:
-        floatSize = 1;
-        break;
-      case 8:
-        floatSize = 2;
-        break;
-      case 16:
-        floatSize = 3;
-        break;
-    }
+    std::uint8_t floatSize = getTagSizeFromFloatType<T>();
     std::uint8_t v = writeType(FieldType::floating_point, floatSize);
     ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(std::uint8_t));
-    ar.template saveBinary<sizeof(T)>(std::addressof(t), sizeof(t));
+    if (t == t) {
+      ar.template saveBinary<sizeof(T)>(std::addressof(t), sizeof(t));
+    } else {
+      auto qNaN = getqNaN<T>();
+      ar.template saveBinary<sizeof(qNaN)>(std::addressof(qNaN), sizeof(qNaN));
+    }
   }
 
   //! Loading for floating point types from extendable binary
@@ -1013,7 +1006,7 @@ namespace cereal
     static_assert( !std::is_floating_point<T>::value ||
                    (std::is_floating_point<T>::value && std::numeric_limits<T>::is_iec559),
                    "Extendable binary only supports IEEE 754 standardized floating point" );
-    static_assert((sizeof(t) == 4) || (sizeof(t) == 8) || (sizeof(t) == 16), "unsupported float size");
+    static_assert((sizeof(t) == 4) || (sizeof(t) == 8), "unsupported float size");
     using namespace extendable_binary_detail;
     auto type = ar.getTypeTag<FieldType::floating_point>();
     if(type.first == FieldType::omitted_field)
@@ -1034,14 +1027,7 @@ namespace cereal
         break;
       }
       // https://en.wikipedia.org/wiki/Long_double
-      // FIXME can be different size
-      case 3: {
-        long double dest;
-        ar.template loadBinary<sizeof(dest)>(std::addressof(dest), sizeof(dest));
-        // in case of float/double, TODO make separate specialization
-        t = dest;
-        break;
-      }
+      // can be different size on different platforms
       default:
         throw Exception("Not supported size of floating point: " + std::to_string(type.second));
     }

@@ -201,25 +201,47 @@ namespace cereal
           return 4;
         case 2:
           return 8;
-        case 3:
-          return 16;
         default:
           throw Exception("Unsupported floating point size");
       }
     }
 
+
+    template <class T> inline
+    T getqNaN();
+
+    template <> inline
+    float getqNaN()
+    {
+      union { float f; std::uint32_t i; } f;
+      f.i = 0x7fc00000;
+      return f.f;
+    }
+
+    template <> inline
+    double getqNaN()
+    {
+      union { double d; std::uint64_t i; } d;
+      d.i = 0x7FF8000000000000ull;
+      return d.d;
+    }
+
+    template <class T> inline
+    T getqNaN()
+    {
+      static_assert(traits::detail::delay_static_assert<T>::value, "unknown qNaN value");
+    }
+
     template <class T> inline
     std::uint8_t getTagSizeFromFloatType()
     {
-      static_assert(sizeof(T) == 4 || sizeof(T) == 8 || sizeof(T) == 16, "unsupported floating point type");
+      static_assert(sizeof(T) == 4 || sizeof(T) == 8, "unsupported floating point type");
       static_assert(std::is_floating_point<T>::value, "expected floating point type");
       switch (sizeof(T)) {
         case 4:
           return 1;
         case 8:
           return 2;
-        case 16:
-          return 3;
       }
     }
 
