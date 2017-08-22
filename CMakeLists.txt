@@ -24,6 +24,8 @@ if(NOT MSVC)
             set(CMAKE_CXX_STANDARD 11)
         endif()
         set(CMAKE_CXX_STANDARD_REQUIRED ON)
+        # pass std=C++11 instead of std=gnu++11; with gnu fails to compile with clang
+        set(CMAKE_CXX_EXTENSIONS OFF)
     endif()
 endif()
 
