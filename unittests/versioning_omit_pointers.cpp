@@ -1,4 +1,4 @@
-/*! \file versioning_omit_pointers.hpp
+/*! \file versioning_omit_pointers.cpp
     \brief Check if omit is working with derived class registration
     \ingroup tests */
 /*
@@ -190,7 +190,7 @@ class A {
     uint8_t version = Archive::is_saving::value ? A_VERSION_WRITE : A_VERSION_READ;
     if(WRITE_TO_CONSOLE) std::cout << "\t\tserialize A archive saving?" << Archive::is_saving::value << " version:" << std::bitset<8>(version) << std::endl;
     if(version & OMIT1_FROM_A) {
-      ar(CEREAL_NVP(cereal::OmittedFieldTag())); // AA*
+      ar(cereal::make_nvp("AAtoBB1", cereal::OmittedFieldTag())); // AA*
     } else if(version & SKIP1_FROM_A) {
       return;
       // do nothing
@@ -201,7 +201,7 @@ class A {
       BOOST_CHECK_EQUAL(ar.wasSerialized(), false == (A_VERSION_WRITE & OMIT1_FROM_A));
     }
     if(version & OMIT2_FROM_A) {
-      ar(CEREAL_NVP(cereal::OmittedFieldTag())); // AA*
+      ar(cereal::make_nvp("AAtoBB2", cereal::OmittedFieldTag())); // AA*
     } else if(version & SKIP2_FROM_A) {
       return;
       // do nothing
@@ -212,7 +212,7 @@ class A {
       BOOST_CHECK_EQUAL(ar.wasSerialized(), false == (A_VERSION_WRITE & OMIT2_FROM_A));
     }
     if(version & OMIT3_FROM_A) {
-      ar(CEREAL_NVP(cereal::OmittedFieldTag())); // AAA*
+      ar(cereal::make_nvp("AAAtoBBB", cereal::OmittedFieldTag())); // AAA*
     } else if(version & SKIP3_FROM_A) {
       return;
     } else {
@@ -222,6 +222,7 @@ class A {
       BOOST_CHECK_EQUAL(ar.wasSerialized(), false == (A_VERSION_WRITE & OMIT3_FROM_A));
     }
   }
+
   bool check() {
     if(WRITE_TO_CONSOLE) std::cout << "\t\tcheck A archive version write:" << std::bitset<8>(A_VERSION_WRITE) << " version read:" << std::bitset<8>(A_VERSION_WRITE) << std::endl;
 
@@ -311,42 +312,65 @@ class B {
 
 };
 
+/* added mostly to use shared static objects for function coverage */
+struct AllShared
+{
+  std::shared_ptr<AA> aa;
+  std::shared_ptr<AAA> aaa;
+  std::shared_ptr<AAAA> aaaa;
+
+  void init() {
+    aa = std::make_shared<BB>();
+    aaa = std::make_shared<BBB>();
+    aaaa = std::make_shared<BBBB>();
+  }
+
+  bool check() {
+    BOOST_CHECK(aa != nullptr);
+    BOOST_CHECK(aaa != nullptr);
+    BOOST_CHECK(aaaa != nullptr);
+    return aa != nullptr && aaa != nullptr && aaaa != nullptr;
+  }
+
+  template<class Archive>
+  void serialize(Archive & ar) {
+    ar(CEREAL_NVP(aa));
+    ar(CEREAL_NVP(aaa));
+    ar(CEREAL_NVP(aaaa));
+  }
+
+};
 
 
-CEREAL_REGISTER_TYPE(A)
-CEREAL_REGISTER_TYPE(AA)
 CEREAL_REGISTER_TYPE(BB)
-CEREAL_REGISTER_TYPE(AAA)
 CEREAL_REGISTER_TYPE(BBB)
-CEREAL_REGISTER_TYPE(AAAA)
 CEREAL_REGISTER_TYPE(BBBB)
 
-template <class IArchive, class OArchive>
+template <class Main, class IArchive, class OArchive>
 static bool check_both(uint8_t write, uint8_t read) {
-
   A_VERSION_WRITE = write;
   A_VERSION_READ = read;
-  if(WRITE_TO_CONSOLE) std::cout << "check_both write:" << std::bitset<8>(write) << " read: " << std::bitset<8>(read) << std::endl;
+  if (WRITE_TO_CONSOLE) std::cout << "check_both write:" << std::bitset<8>(write) << " read: " << std::bitset<8>(read) << std::endl;
 
   bool ok = false;
   std::ostringstream os(std::ios_base::binary | std::ios_base::out);
-  BOOST_REQUIRE_NO_THROW({
-                           B b;
-                           b.init();
-                           OArchive ar(os);
-                           ar(b);
-                         });
+  {
+    Main b;
+    b.init();
+    OArchive ar(os);
+    ar(b);
+  }
   try {
-    B b;
+    Main b;
     std::istringstream is(os.str(), std::ios_base::binary | std::ios_base::in);
     IArchive ar(is);
     ar(b);
     ok = b.check();
-  } catch (const std::exception &e) {
+  } catch (const std::exception & e) {
     std::cerr << "exception: " << e.what() << "\n";
     BOOST_CHECK(false);
   }
-  if(WRITE_TO_CONSOLE) std::cout << std::endl;
+  if (WRITE_TO_CONSOLE) std::cout << std::endl;
   BOOST_CHECK(ok);
   return ok;
 }
@@ -356,27 +380,92 @@ static bool check_first_none(uint8_t two) {
   return check_both<IArchive, OArchive>(A::OMIT_NONE, two);
 }
 
+namespace cereal {
+  template <class Archive> inline
+  typename std::enable_if<!cereal::traits::is_same_archive<Archive, cereal::ExtendableBinaryInputArchive>::value
+                          && !cereal::traits::is_same_archive<Archive, cereal::ExtendableBinaryOutputArchive>::value, void>::type
+  CEREAL_SERIALIZE_FUNCTION_NAME( Archive &, OmittedFieldTag & )
+  {
+    throw std::runtime_error("Should not be called, not implemented");
+  }
+
+} // namespace cereal
+
+
 // comma cannot be in BOOST_CHECK macro
 static bool check_both_json(uint8_t write, uint8_t read) {
-  return check_both<cereal::JSONInputArchive, cereal::JSONOutputArchive>(write, read);
+  return check_both<B, cereal::JSONInputArchive, cereal::JSONOutputArchive>(write, read);
 }
 
 static bool check_both_xml(uint8_t write, uint8_t read) {
-  return check_both<cereal::XMLInputArchive, cereal::XMLOutputArchive>(write, read);
+  return check_both<B, cereal::XMLInputArchive, cereal::XMLOutputArchive>(write, read);
+}
+
+static bool check_both_binary(uint8_t write, uint8_t read) {
+  return check_both<B, cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive>(write, read)
+         && check_both<B, cereal::BinaryInputArchive, cereal::BinaryOutputArchive>(write, read);
 }
 
 static bool check_both_extendable_binary(uint8_t write, uint8_t read) {
-  return check_both<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>(write, read);
+  return check_both<B, cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>(write, read);
 }
 
 static bool check_first_none_json(uint8_t two) {
-  return check_both<cereal::JSONInputArchive, cereal::JSONOutputArchive>(A::OMIT_NONE, two);
+  return check_both<B, cereal::JSONInputArchive, cereal::JSONOutputArchive>(A::OMIT_NONE, two);
 }
 
 static bool check_first_none_extendable_binary(uint8_t two) {
-  return check_both<cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>(A::OMIT_NONE, two);
+  return check_both<B, cereal::ExtendableBinaryInputArchive, cereal::ExtendableBinaryOutputArchive>(A::OMIT_NONE, two);
 }
+
 BOOST_AUTO_TEST_SUITE(OmitClassRegistration)
+
+  BOOST_AUTO_TEST_CASE(AllShared)
+  {
+    bool json = check_both<::AllShared, cereal::JSONInputArchive,
+        cereal::JSONOutputArchive>(A::OMIT_NONE, A::OMIT_NONE);
+    BOOST_CHECK(json);
+    bool xml = check_both<::AllShared, cereal::XMLInputArchive,
+        cereal::XMLOutputArchive>(A::OMIT_NONE, A::OMIT_NONE);
+    BOOST_CHECK(xml);
+    bool pbinary = check_both<::AllShared, cereal::PortableBinaryInputArchive,
+        cereal::PortableBinaryOutputArchive>(A::OMIT_NONE, A::OMIT_NONE);
+    BOOST_CHECK(pbinary);
+    bool binary = check_both<::AllShared, cereal::BinaryInputArchive,
+        cereal::BinaryOutputArchive>(A::OMIT_NONE, A::OMIT_NONE);
+
+    BOOST_CHECK(binary);
+    bool ebinary = check_both<::AllShared, cereal::ExtendableBinaryInputArchive,
+        cereal::ExtendableBinaryOutputArchive>(A::OMIT_NONE, A::OMIT_NONE);
+    BOOST_CHECK(ebinary);
+
+    auto json_omit = []() {
+      return check_both<::B, cereal::JSONInputArchive,
+          cereal::JSONOutputArchive>(A::OMIT1_FROM_A, A::OMIT1_FROM_A);
+    };
+    BOOST_CHECK_THROW(json_omit(), std::runtime_error);
+    auto xml_omit = []() {
+      return check_both<::B, cereal::XMLInputArchive,
+          cereal::XMLOutputArchive>(A::OMIT1_FROM_A, A::OMIT1_FROM_A);
+    };
+    BOOST_CHECK_THROW(xml_omit(), std::runtime_error);
+    auto pbinary_omit = []() {
+      return check_both<::B, cereal::PortableBinaryInputArchive,
+          cereal::PortableBinaryOutputArchive>(A::OMIT1_FROM_A, A::OMIT1_FROM_A);
+    };
+    BOOST_CHECK_THROW(pbinary_omit(), std::runtime_error);
+    auto binary_omit = []() {
+      return check_both<::B, cereal::BinaryInputArchive,
+          cereal::BinaryOutputArchive>(A::OMIT1_FROM_A, A::OMIT1_FROM_A);
+
+    };
+    BOOST_CHECK_THROW(binary_omit(), std::runtime_error);
+//    auto ebinary_omit = []() {
+//      return check_both<::AllShared, cereal::ExtendableBinaryInputArchive,
+//          cereal::ExtendableBinaryOutputArchive>(A::OMIT1_FROM_A, A::OMIT1_FROM_A);
+//    };
+//    BOOST_CHECK_THROW(ebinary_omit(), std::runtime_error);
+  }
 
 /* both are reading and saving same fields */
   BOOST_AUTO_TEST_CASE(OmitNone)
@@ -384,6 +473,7 @@ BOOST_AUTO_TEST_SUITE(OmitClassRegistration)
     BOOST_CHECK(check_both_json(A::OMIT_NONE, A::OMIT_NONE));
     BOOST_CHECK(check_both_xml(A::OMIT_NONE, A::OMIT_NONE));
     BOOST_CHECK(check_both_extendable_binary(A::OMIT_NONE, A::OMIT_NONE));
+    BOOST_CHECK(check_both_binary(A::OMIT_NONE, A::OMIT_NONE));
   }
 
   BOOST_AUTO_TEST_CASE(BothSkip1)
@@ -391,6 +481,7 @@ BOOST_AUTO_TEST_SUITE(OmitClassRegistration)
     BOOST_CHECK(check_both_json(A::SKIP1_FROM_A, A::SKIP1_FROM_A));
     BOOST_CHECK(check_both_xml(A::SKIP1_FROM_A, A::SKIP1_FROM_A));
     BOOST_CHECK(check_both_extendable_binary(A::SKIP1_FROM_A, A::SKIP1_FROM_A));
+    BOOST_CHECK(check_both_binary(A::SKIP1_FROM_A, A::SKIP1_FROM_A));
   }
 
   BOOST_AUTO_TEST_CASE(BothSkip2)
@@ -398,6 +489,7 @@ BOOST_AUTO_TEST_SUITE(OmitClassRegistration)
     BOOST_CHECK(check_both_json(A::SKIP2_FROM_A, A::SKIP2_FROM_A));
     BOOST_CHECK(check_both_xml(A::SKIP2_FROM_A, A::SKIP2_FROM_A));
     BOOST_CHECK(check_both_extendable_binary(A::SKIP2_FROM_A, A::SKIP2_FROM_A));
+    BOOST_CHECK(check_both_binary(A::SKIP2_FROM_A, A::SKIP2_FROM_A));
   }
 
   BOOST_AUTO_TEST_CASE(BothSkip3)
@@ -405,6 +497,7 @@ BOOST_AUTO_TEST_SUITE(OmitClassRegistration)
     BOOST_CHECK(check_both_json(A::SKIP3_FROM_A, A::SKIP3_FROM_A));
     BOOST_CHECK(check_both_xml(A::SKIP3_FROM_A, A::SKIP3_FROM_A));
     BOOST_CHECK(check_both_extendable_binary(A::SKIP3_FROM_A, A::SKIP3_FROM_A));
+    BOOST_CHECK(check_both_binary(A::SKIP3_FROM_A, A::SKIP3_FROM_A));
   }
 
   BOOST_AUTO_TEST_CASE(OmitBoth1)
