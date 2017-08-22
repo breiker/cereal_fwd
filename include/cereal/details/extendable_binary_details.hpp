@@ -280,8 +280,9 @@ namespace cereal
     class StreamAdapter
     {
       public:
-        StreamAdapter(std::istream & stream, std::stringstream & sharedObjectStream)
-            : nowReading(nullptr), bytesLeft(0), mainStream(stream), backStream(sharedObjectStream)
+        StreamAdapter(std::istream & stream, std::stringstream & sharedObjectStream, std::size_t maxBytesInSharedStream)
+            : nowReading(nullptr), bytesLeft(0), endOfWritingStream(0), startOfStream(sharedObjectStream.tellg()),
+              mainStream(stream), backStream(sharedObjectStream), maxBytesSharedStream(maxBytesInSharedStream)
         {}
 
         //! Pushes new reading position on the stream
@@ -349,6 +350,13 @@ namespace cereal
           if (streamError)
             throw Exception("Failed to skip " + std::to_string(size) + " bytes from input stream!");
         }
+        inline void checkIfMaxSize(std::size_t size, std::ostream& stream)
+        {
+          std::size_t posNow = static_cast<std::size_t>(stream.tellp());
+          if (posNow - startOfStream + size > maxBytesSharedStream) {
+            throw Exception("Shared obiect shared data limit hit");
+          }
+        }
 
         //! Reads size bytes from the input stream and copies them to other stream
         /*! @param size The number of bytes to read and copy
@@ -356,6 +364,7 @@ namespace cereal
             Throws if not enough bytes are read */
         inline void readToOtherStream(std::size_t size, std::ostream & stream)
         {
+          checkIfMaxSize(size, stream);
           auto copyN = [](std::istream & from, std::size_t sizeToCopy, std::ostream & to) {
             auto start = std::istreambuf_iterator<char>(from);
             auto end = std::istreambuf_iterator<char>();
@@ -370,7 +379,8 @@ namespace cereal
           if (nowReading == nullptr) {
             copyN(mainStream, size, stream);
           } else {
-            assert(false); // shouldn't be here
+            // shouldn't be here, there is no point in copying data if we are reading from backStream
+            assert(false);
             if (size > bytesLeft) {
               throw Exception("went to far reading skipped shared object stream");
             }
@@ -401,13 +411,18 @@ namespace cereal
         }
 
       private:
+        //! current reading stream position
         StreamPos *nowReading;
+        //! how many bytes are left for nowReading position
         std::size_t bytesLeft;
         //! end of writing backStream, will be restored when reading from other position is done
         std::size_t endOfWritingStream;
+        //! start of stream at construction
+        const std::size_t startOfStream;
         std::queue<std::pair<std::size_t, StreamPos *>> backStreams;
         std::istream & mainStream;
         std::istream & backStream;
+        const std::size_t maxBytesSharedStream;
     };
   } // namespace extendable_binary_detail
 } // namespace cereal

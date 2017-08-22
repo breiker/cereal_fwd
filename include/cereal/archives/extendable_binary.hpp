@@ -327,9 +327,22 @@ namespace cereal
           static Options BigEndian(){ return Options( Endianness::big ); }
 
           //! Specify specific options for the ExtendableBinaryInputArchive
-          /*! @param inputEndian The desired endianness of loaded (input) data */
-          explicit Options( Endianness inputEndian = getEndianness() ) :
-            itsInputEndianness( inputEndian ) { }
+          /*! @param inputEndian The desired endianness of loaded (input) data
+           *  @param maxSharedBufferSize maximum data size in bytes saved for shared pointers
+           *         for which data was not loaded explicitly and may be needed to be available
+           *         if same pointer is needed to be loaded later in stream */
+          explicit Options( Endianness inputEndian_ = getEndianness(),
+                            std::size_t maxSharedBufferSize_ = std::numeric_limits<std::size_t>::max()):
+            itsInputEndianness( inputEndian_ ),
+            itsMaxSharedBufferSize( maxSharedBufferSize_ )
+          { }
+
+          //! Set max buffer size for shared data
+          Options & maxSharedBufferSize(std::size_t maxSharedBufferSize_)
+          {
+            itsMaxSharedBufferSize = maxSharedBufferSize_;
+            return *this;
+          }
 
         private:
           //! Gets the endianness of the system
@@ -340,8 +353,13 @@ namespace cereal
           inline std::uint8_t is_little_endian() const
           { return itsInputEndianness == Endianness::little; }
 
+          //! Gets maximum data size for cached shared pointer data for not loaded shared pointers
+          inline std::size_t getMaxSharedBufferSize() const
+          { return itsMaxSharedBufferSize; }
+
           friend class ExtendableBinaryInputArchive;
           Endianness itsInputEndianness;
+          std::size_t itsMaxSharedBufferSize;
       };
 
       //! Construct, loading from the provided stream
@@ -351,7 +369,7 @@ namespace cereal
       ExtendableBinaryInputArchive(std::istream & stream, Options const & options = Options::Default()) :
         InputArchive<ExtendableBinaryInputArchive, Flags::ForwardSupport>(this),
         sharedObjectStream(std::ios::binary | std::ios::in | std::ios::out),
-        itsStream(stream, sharedObjectStream),
+        itsStream(stream, sharedObjectStream, options.itsMaxSharedBufferSize),
         itsConvertEndianness( false )
       {
         uint8_t streamLittleEndian;
@@ -371,6 +389,7 @@ namespace cereal
         // load data
         auto const readSize = itsStream.readBinary( reinterpret_cast<char*>( data ), size );
         if(false == savedShared.saving.empty()) {
+          itsStream.checkIfMaxSize(size, sharedObjectStream);
           sharedObjectStream.write(reinterpret_cast<char*>(data), size);
         }
 
