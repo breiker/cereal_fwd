@@ -26,7 +26,9 @@
 */
 #include "common.hpp"
 #include <boost/test/unit_test.hpp>
+#if BOOST_VERSION >= 105300
 #include <boost/utility/string_ref.hpp>
+#endif
 
 template <class IArchive, class OArchive>
 void test_string_basic()
@@ -156,6 +158,7 @@ void test_ws_in_out(Out const & o_value_with_ws)
   BOOST_CHECK_EQUAL(i_value_with_ws, o_value_with_ws);
 }
 
+#if BOOST_VERSION >= 105300
 namespace boost
 {
   void save( cereal::XMLOutputArchive & ar, boost::string_ref const & str )
@@ -198,6 +201,7 @@ BOOST_AUTO_TEST_CASE( xml_string_issue109 )
     test_ws_in_out<cereal::XMLInputArchive, cereal::XMLOutputArchive, boost::string_ref, std::string>( o_string );
   }
 }
+#endif
 
 BOOST_AUTO_TEST_CASE( xml_char_issue109 )
 {
