@@ -68,16 +68,15 @@ namespace cereal
           //! Default options, preserve system endianness
           static Options Default(){ return Options(); }
 
-          //! Save as little endian
-          static Options LittleEndian(){ return Options( Endianness::little ); }
-
-          //! Save as big endian
-          static Options BigEndian(){ return Options( Endianness::big ); }
-
           //! Specify specific options for the ExtendableBinaryOutputArchive
           /*! @param outputEndian The desired endianness of saved (output) data */
-          explicit Options( Endianness outputEndian = getEndianness() ) :
-            itsOutputEndianness( outputEndian ) { }
+          explicit Options( Endianness outputEndian_ = getEndianness() ) :
+            itsOutputEndianness( outputEndian_ ) { }
+
+          //! Save as little endian
+          Options& littleEndian(){ itsOutputEndianness = Endianness::little; return *this; }
+          //! Save as big endian
+          Options& bigEndian(){ itsOutputEndianness = Endianness::big; return *this; }
 
         private:
           //! Gets the endianness of the system
@@ -125,6 +124,36 @@ namespace cereal
         if(writtenSize != size)
           throw Exception("Failed to write " + std::to_string(size) + " bytes to output stream! Wrote " + std::to_string(writtenSize));
       }
+      //! Writes size bytes of data to the output stream
+      template <std::size_t DataSize> inline
+      void saveBinaryNoSwap( const void * data, std::size_t size )
+      {
+        std::size_t writtenSize = 0;
+
+        writtenSize = static_cast<std::size_t>( itsStream.rdbuf()->sputn( reinterpret_cast<const char*>( data ), size ) );
+
+        if(writtenSize != size)
+          throw Exception("Failed to write " + std::to_string(size) + " bytes to output stream! Wrote " + std::to_string(writtenSize));
+      }
+
+      //! Writes size bytes of data to the output stream
+      template<std::size_t DataSize> inline
+      void saveBinarySingle( const void * data, std::size_t size )
+      {
+        std::size_t writtenSize = 0;
+        const std::uint8_t * dataEndian = reinterpret_cast<const std::uint8_t*>(data) + (extendable_binary_detail::is_little_endian() ? 0 : DataSize - size);
+
+        if( itsConvertEndianness )
+        {
+          for( std::size_t j = 0; j < size; ++j )
+            writtenSize += static_cast<std::size_t>( itsStream.rdbuf()->sputn( reinterpret_cast<const char*>( dataEndian ) + size - j - 1, 1 ) );
+        }
+        else
+          writtenSize = static_cast<std::size_t>( itsStream.rdbuf()->sputn( reinterpret_cast<const char*>( dataEndian ), size ) );
+
+        if(writtenSize != size)
+          throw Exception("Failed to write " + std::to_string(size) + " bytes to output stream! Wrote " + std::to_string(writtenSize));
+      }
 
       //! Writes varint to the stream
       /*! Based on protobuf usage */
@@ -142,7 +171,7 @@ namespace cereal
         }
         buffer[size] = static_cast<std::uint8_t>(v) & 0x7f;
         // we don't want bit swap here
-        saveBinary<sizeof(std::uint8_t)>(buffer.data(), size + 1);
+        saveBinaryNoSwap<sizeof(std::uint8_t)>(buffer.data(), size + 1);
       }
 
       void saveObjectBeginning()
@@ -320,12 +349,6 @@ namespace cereal
           //! Default options, preserve system endianness
           static Options Default(){ return Options(); }
 
-          //! Load into little endian
-          static Options LittleEndian(){ return Options( Endianness::little ); }
-
-          //! Load into big endian
-          static Options BigEndian(){ return Options( Endianness::big ); }
-
           //! Specify specific options for the ExtendableBinaryInputArchive
           /*! @param inputEndian The desired endianness of loaded (input) data
            *  @param maxSharedBufferSize maximum data size in bytes saved for shared pointers
@@ -336,6 +359,11 @@ namespace cereal
             itsInputEndianness( inputEndian_ ),
             itsMaxSharedBufferSize( maxSharedBufferSize_ )
           { }
+
+          //! Set endianess to little endian
+          Options& littleEndian(){ itsInputEndianness = Endianness::little; return *this; }
+          //! Set endianess to big endian
+          Options & bigEndian(){ itsInputEndianness = Endianness::big; return *this; }
 
           //! Set max buffer size for shared data
           Options & maxSharedBufferSize(std::size_t maxSharedBufferSize_)
@@ -404,7 +432,42 @@ namespace cereal
             extendable_binary_detail::swap_bytes<DataSize>( ptr + i );
         }
       }
-      
+
+      //! Reads size bytes of data from the input stream
+      /*! @param data The data to save
+          @param size The number of bytes in the data
+          @tparam DataSize T The size of the actual type of the data elements being loaded */
+      template <std::size_t DataSize> inline
+      void loadBinarySingle( void * const data, std::size_t size )
+      {
+        // load data
+        std::uint8_t* dataEndian = reinterpret_cast<std::uint8_t*>(data) + (extendable_binary_detail::is_little_endian() ? 0 : DataSize - size);
+        auto const readSize = itsStream.readBinary( reinterpret_cast<char*>( dataEndian ), size );
+        if(false == savedShared.saving.empty()) {
+          itsStream.checkIfMaxSize(size, sharedObjectStream);
+          sharedObjectStream.write(reinterpret_cast<char*>(data), size);
+        }
+
+        if(readSize != size)
+          throw Exception("Failed to read " + std::to_string(size) + " bytes from input stream! Read " + std::to_string(readSize));
+
+        // flip bits if needed
+        if( itsConvertEndianness ) {
+          std::uint8_t * ptr = reinterpret_cast<std::uint8_t*>( dataEndian );
+          for( std::size_t i = 0, end = size / 2; i < end; ++i )
+            std::swap( ptr[i], ptr[size - i - 1] );
+        }
+      }
+
+      template <std::size_t DataSize> inline
+      void copyBinarySingleLittleEndian( void * dest_, void * const src_, std::size_t size_ )
+      {
+        std::uint8_t* src = reinterpret_cast<std::uint8_t*>(src_) + (extendable_binary_detail::is_little_endian() ? 0 : DataSize - size_);
+        std::uint8_t* dest = reinterpret_cast<std::uint8_t*>(dest_);
+        std::memcpy(dest, src, size_);
+      }
+
+
       //! Discards size bytes from the input stream
       /*! @param size The number of bytes in the data
           Throws if not enough bytes are read */
@@ -459,97 +522,87 @@ namespace cereal
       {
         static_assert(sizeof(T) <= (extendable_binary_detail::maxVarintSize*7)/8, "value is to big to be a varint");
         static_assert(std::is_unsigned<T>::value, "only unsigned varints are supported");
-#if 0
-        std::uint8_t first;
-          std::array<std::uint8_t, extendable_binary_detail::maxVarintSize> buffer;
-          buffer.fill(0);
-          std::size_t size = 1;
-          loadBinary<sizeof(std::uint8_t)>(&first, sizeof(std::uint8_t));
-          buffer[size - 1] = first & 0x7f;
-          while(first >= 0x80 && size < extendable_binary_detail::maxVarintSize) {
-            loadBinary<sizeof(std::uint8_t)>(&first, sizeof(std::uint8_t));
-            buffer[size - 1] |= (first & 0x7f) << (7 * size);
-            buffer[size]     |= (first & 0x7f) >> (size);
-            ++size;
-          }
-          for(std::size_t i = sizeof(T); i <= size; i++) {
-            if(buffer[i] > 0) {
-              throw Exception("Varint is to big to be loaded" + std::to_string(size) + " dest:" + std::to_string(sizeof(v)) + " at:" + std::to_string(i));
-            }
-          }
-          // TODO limits
-          std::memcpy(&v, buffer.data(), sizeof(T));
-#endif
+
         std::uint32_t f = 0, s = 0;
         auto load = [&]() {
+          std::uint8_t bytes = 1;
           std::uint32_t f1 = 0, f2 = 0, f3 = 0, f4 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, s5 = 0, s6 = 0;
-          loadBinary<sizeof(std::uint8_t)>(&f1, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&f1, sizeof(std::uint8_t));
           if(f1 < 0x80) {
             f = f1;
-            return;
+            return bytes;
           }
-          loadBinary<sizeof(std::uint8_t)>(&f2, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&f2, sizeof(std::uint8_t));
+          ++bytes;
           if(f2 < 0x80) {
             f = (f1 - 0x80) | (f2 << 7);
-            return;
+            return bytes;
           }
-          loadBinary<sizeof(std::uint8_t)>(&f3, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&f3, sizeof(std::uint8_t));
+          ++bytes;
           if(f3 < 0x80) {
             f = (f1 - 0x80) | ((f2 - 0x80) << 7) | (f3 << 14);
-            return;
+            return bytes;
           }
-          loadBinary<sizeof(std::uint8_t)>(&f4, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&f4, sizeof(std::uint8_t));
+          ++bytes;
           if(f4 < 0x80) {
             f = (f1 - 0x80) | ((f2 - 0x80) << 7) | ((f3 - 0x80) << 14) | (f4 << 21);
-            return;
+            return bytes;
           }
-          loadBinary<sizeof(std::uint8_t)>(&s1, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&s1, sizeof(std::uint8_t));
+          ++bytes;
           if(s1 < 0x80) {
             f = (f1 - 0x80) | ((f2 - 0x80) << 7) | ((f3 - 0x80) << 14) | ((f4 - 0x80) << 21) | (s1 << 28);
             s = s1 >> 3;
-            return;
+            return bytes;
           }
-          loadBinary<sizeof(std::uint8_t)>(&s2, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&s2, sizeof(std::uint8_t));
+          ++bytes;
           if(s2 < 0x80) {
             f = (f1 - 0x80) | ((f2 - 0x80) << 7) | ((f3 - 0x80) << 14) | ((f4 - 0x80) << 21) | ((s1 - 0x80) << 28);
             s = ((s1 - 0x80) >> 4) | (s2 << 3);
-            return;
+            return bytes;
           }
-          loadBinary<sizeof(std::uint8_t)>(&s3, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&s3, sizeof(std::uint8_t));
+          ++bytes;
           if(s3 < 0x80) {
             f = (f1 - 0x80) | ((f2 - 0x80) << 7) | ((f3 - 0x80) << 14) | ((f4 - 0x80) << 21) | ((s1 - 0x80) << 28);
             s = ((s1 - 0x80) >> 4) | ((s2 - 0x80) << 3) | s3 << 10;
-            return;
+            return bytes;
           }
-          loadBinary<sizeof(std::uint8_t)>(&s4, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&s4, sizeof(std::uint8_t));
+          ++bytes;
           if(s4 < 0x80) {
             f = (f1 - 0x80) | ((f2 - 0x80) << 7) | ((f3 - 0x80) << 14) | ((f4 - 0x80) << 21) | ((s1 - 0x80) << 28);
             s = ((s1 - 0x80) >> 4) | ((s2 - 0x80) << 3) | ((s3 - 0x80) << 10) | s4 << 17;
-            return;
+            return bytes;
           }
-          loadBinary<sizeof(std::uint8_t)>(&s5, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&s5, sizeof(std::uint8_t));
+          ++bytes;
           if(s5 < 0x80) {
             f = (f1 - 0x80) | ((f2 - 0x80) << 7) | ((f3 - 0x80) << 14) | ((f4 - 0x80) << 21) | ((s1 - 0x80) << 28);
             s = ((s1 - 0x80) >> 4) | ((s2 - 0x80) << 3) | ((s3 - 0x80) << 10) | ((s4 - 0x80) << 17) | s5 << 24;
-            return;
+            return bytes;
           }
-          loadBinary<sizeof(std::uint8_t)>(&s6, sizeof(std::uint8_t));
+          loadBinarySingle<sizeof(std::uint32_t)>(&s6, sizeof(std::uint8_t));
+          ++bytes;
           if(s6 < 0x80) {
             f = (f1 - 0x80) | ((f2 - 0x80) << 7) | ((f3 - 0x80) << 14) | ((f4 - 0x80) << 21) | ((s1 - 0x80) << 28);
             s = ((s1 - 0x80) >> 4) | ((s2 - 0x80) << 3)  | ((s3 - 0x80) << 10) | ((s4 - 0x80) << 17) | ((s5 - 0x80) << 24) | s6 << 31;
-            return;
+            return bytes;
           } else {
-            throw Exception("To big varint");
+            throw Exception("Too big varint");
           }
         };
         load();
         if(sizeof(T) == 8) {
-          std::uint64_t dest = s;
-          dest <<= (sizeof(s)*8);
-          dest |= f;
-          std::memcpy(&v, &dest, sizeof(v));
+          std::uint64_t final = s;
+          final <<= (sizeof(s)*8);
+          final |= f;
+          std::memcpy(&v, &final, sizeof(T));
         } else {
-          std::memcpy(&v, &f, sizeof(v));
+          copyBinarySingleLittleEndian<sizeof(s)>(&v, &f, sizeof(T));
         }
       }
 
@@ -559,7 +612,7 @@ namespace cereal
         // TODO can implement faster approach, without interpreting
         std::uint64_t ignore;
         loadVarint(ignore);
-    }
+      }
 
       inline void loadObjectBeginning()
       {
@@ -838,9 +891,7 @@ namespace cereal
               if(sizeTagSize > sizeof(lastIgnoredSizeTag)) {
                 throw Exception("Size tag is to big to be loaded");
               }
-              loadBinary<sizeof(lastIgnoredSizeTag)>(&lastIgnoredSizeTag,
-                                            sizeTagSize);
-              // TODO check if endian swapping is right here
+              loadBinarySingle<sizeof(lastIgnoredSizeTag)>(&lastIgnoredSizeTag, sizeTagSize);
               break;
             }
             default:
@@ -948,8 +999,7 @@ namespace cereal
       const auto fieldType = t >= 0 ? FieldType::positive_integer : FieldType::negative_integer;
       std::uint8_t v = writeType(fieldType, neededBytes);
       ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(v));
-      // TODO fix for big endian
-      ar.saveBinary<sizeof(T)>(std::addressof(absolute), neededBytes);
+      ar.saveBinarySingle<sizeof(T)>(std::addressof(absolute), neededBytes);
     }
   }
 
@@ -974,8 +1024,7 @@ namespace cereal
           throw Exception("Integer is to big to be loaded");
         }
         t = 0;
-        // TODO fix big endian, size of elem may be wrong
-        ar.template loadBinary<sizeof(T)>(std::addressof(t), neededByteSize);
+        ar.loadBinarySingle<sizeof(T)>(std::addressof(t), neededByteSize);
         break;
       }
       case FieldType::negative_integer: {
@@ -987,8 +1036,7 @@ namespace cereal
           throw Exception("Negative value cannot be loaded to unsigned type");
         }
         t = 0;
-        // TODO fix big endian, size of elem may be wrong
-        ar.template loadBinary<sizeof(T)>(std::addressof(t), neededByteSize);
+        ar.loadBinarySingle<sizeof(T)>(std::addressof(t), neededByteSize);
         t = -t;
         break;
       }
@@ -1073,8 +1121,7 @@ namespace cereal
     const auto fieldType = FieldType::size_tag;
     std::uint8_t v = writeType(fieldType, neededBytes);
     ar.template saveBinary<sizeof(std::uint8_t)>(&v, sizeof(v));
-    // TODO fix for big endian
-    ar.saveBinary<sizeof(T)>(std::addressof(t.size), static_cast<std::size_t>(neededBytes));
+    ar.saveBinarySingle<sizeof(T)>(std::addressof(t.size), static_cast<std::size_t>(neededBytes));
   }
 
   //! Loading SizeTag from extendable binary
@@ -1091,8 +1138,7 @@ namespace cereal
         throw Exception("Size tag integer is to big to be loaded");
       }
       t.size = 0;
-      // TODO fix big endian, size of elem may be wrong
-      ar.template loadBinary<sizeof(T)>(std::addressof(t.size), neededByteSize);
+      ar.loadBinarySingle<sizeof(T)>(std::addressof(t.size), neededByteSize);
       ar.setLastSizeTag(t.size);
     }
   }
