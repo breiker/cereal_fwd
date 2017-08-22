@@ -1436,6 +1436,16 @@ namespace cereal
   {
     ar.loadEndOfObjectData();
   }
+
+  template <>
+  struct longdouble<ExtendableBinaryInputArchive> {
+    using type = double;
+  };
+
+  template <>
+  struct longdouble<ExtendableBinaryOutputArchive> {
+    using type = double;
+  };
 } // namespace cereal
 
 // register archives for polymorphic support
