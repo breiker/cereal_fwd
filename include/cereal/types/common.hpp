@@ -124,6 +124,17 @@ namespace cereal
         std::integral_constant<bool, traits::is_output_serializable<BinaryData<T>, Archive>::value &&
                                      std::is_arithmetic<typename std::remove_all_extents<T>::type>::value>() );
   }
+
+
+  //! Nearest (by precision) floating point type to longdouble supported by Archive
+  /*! long double may not be supported by some archives. It's not well defined and
+   * it's hard to keep serialized form portable form between platforms.
+   * 64bit, 80bit and 128 bit precision can be encountered. */
+  template <class Archive>
+  struct longdouble {
+    using type = long double;
+  };
+
 } // namespace cereal
 
 #endif // CEREAL_TYPES_COMMON_HPP_
