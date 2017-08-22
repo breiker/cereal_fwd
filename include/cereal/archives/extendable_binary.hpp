@@ -355,9 +355,11 @@ namespace cereal
            *         for which data was not loaded explicitly and may be needed to be available
            *         if same pointer is needed to be loaded later in stream */
           explicit Options( Endianness inputEndian_ = getEndianness(),
-                            std::size_t maxSharedBufferSize_ = std::numeric_limits<std::size_t>::max()):
+                            std::size_t maxSharedBufferSize_ = std::numeric_limits<std::size_t>::max(),
+                            bool ignoreUnknownPolymorphicTypes_ = true) :
             itsInputEndianness( inputEndian_ ),
-            itsMaxSharedBufferSize( maxSharedBufferSize_ )
+            itsMaxSharedBufferSize( maxSharedBufferSize_ ),
+            itsIgnoreUnknownPolymorphicTypes( ignoreUnknownPolymorphicTypes_ )
           { }
 
           //! Set endianess to little endian
@@ -369,6 +371,12 @@ namespace cereal
           Options & maxSharedBufferSize(std::size_t maxSharedBufferSize_)
           {
             itsMaxSharedBufferSize = maxSharedBufferSize_;
+            return *this;
+          }
+
+          Options & ignoreUnknownPolymorphicTypes(bool ignore)
+          {
+            itsIgnoreUnknownPolymorphicTypes = ignore;
             return *this;
           }
 
@@ -388,6 +396,7 @@ namespace cereal
           friend class ExtendableBinaryInputArchive;
           Endianness itsInputEndianness;
           std::size_t itsMaxSharedBufferSize;
+          bool itsIgnoreUnknownPolymorphicTypes;
       };
 
       //! Construct, loading from the provided stream
@@ -403,6 +412,7 @@ namespace cereal
         uint8_t streamLittleEndian;
         this->loadBinary<sizeof(std::uint8_t)>( &streamLittleEndian, sizeof(std::uint8_t));
         itsConvertEndianness = options.is_little_endian() ^ streamLittleEndian;
+        itsIgnoreUnknownPolymorphicTypes = options.itsIgnoreUnknownPolymorphicTypes;
       }
 
       ~ExtendableBinaryInputArchive() CEREAL_NOEXCEPT = default;
@@ -769,26 +779,44 @@ namespace cereal
         }
         if (markers & PointerMarkers::IsPolymorphicPointer) {
           loadBinary<sizeof(std::int32_t)>(&polymorphicId, sizeof(std::int32_t));
-          if (polymorphicId & detail::msb_32bit) { // TODO change msb to lsb?
+          const bool isNewId = polymorphicId & detail::msb_32bit;
+          const bool noPolymorphicCast = polymorphicId & detail::msb2_32bit;
+          if (isNewId) { // TODO change msb to lsb?
             std::uint32_t nameSize;
             loadVarint(nameSize);
             // TODO limit max size for safety
             polymorphicName.resize(nameSize);
             using char_type = decltype(polymorphicName)::value_type;
-            loadBinary<sizeof(char_type)>(const_cast<char_type *>(polymorphicName.data()),
+            loadBinary<sizeof(char_type)>(&polymorphicName[0u],
                                           nameSize * sizeof(char_type));
             // TODO change to uint8_t (may not match on sending side)
             // normally it would be multiply by one, but on other platforms we could just have problems
-            // TODO const_cast doesn't seem to be best idea, we know that variable is not const but it just doesn't seem right
-            //      Similar code is used in string serialization
-            //      Do we have warranty that cow is disabled (on all platforms)?
+          } else if(noPolymorphicCast) {
+            return;
+          } else {
+            polymorphicName = getPolymorphicName(polymorphicId);
+          }
+          /* */
+          if (itsIgnoreUnknownPolymorphicTypes &&
+              false == emptyClass &&
+              false == polymorphic_detail::hasPolymorphicBinding<ExtendableBinaryInputArchive>(polymorphicName)
+              ) {
+            if(isNewId) {
+              /* We will skip pointer loading do name would've not been registered.
+               * note: resetObjectDetails will reset name and id */
+              registerPolymorphicName(polymorphicId, polymorphicName);
+            }
+            resetObjectDetails();
+            emptyClass = true;
+            loadTypeTag();
+            loadEndOfClass(true);
           }
         }
       }
 
       //! Skip data in archive loading at least one element until class depth 0 is reached.
-      /*! At the beginning if isInObject is set to true depth is assumed to be 1, 0 otherwise.
-          That means that if isInObject is set to truedata will be skipped untill FieldType::last_field
+      /*! At the beginning if isInObject is set to true, depth is assumed to be 1, 0 otherwise.
+          That means that if isInObject is set to true, data will be skipped until FieldType::last_field
           is reached for same depth.
           If isInObject is set to false at least one field will be loaded.*/
       inline void loadEndOfClass(bool isInObject)
@@ -858,13 +886,10 @@ namespace cereal
                   // TODO limit max size for safety
                   polymorphicName.resize(nameSize);
                   using char_type = decltype(polymorphicName)::value_type;
-                  loadBinary<sizeof(char_type)>(const_cast<char_type*>(polymorphicName.data()),
+                  loadBinary<sizeof(char_type)>(&polymorphicName[0u],
                                                 nameSize * sizeof(char_type));
                   // TODO change to uint8_t (may not match on sending side)
                   // normally it would be multiply by one, but on other platforms we could just have problems
-                  // TODO const_cast doesn't seem to be best idea, we know that variable is not const but it just doesn't seem right
-                  //      Similar code is used in string serialization
-                  //      Do we have warranty that cow is disabled (on all platforms)?
                   registerPolymorphicName(polymorphicId, polymorphicName);
                   /* Needed if polymorphic pointer's class name is saved but field is not loaded.
                    * If polymorphic pointer of the same class is saved later class name would be unknown since class name is saved only once. */
@@ -946,6 +971,8 @@ namespace cereal
       extendable_binary_detail::StreamAdapter itsStream;
 
       uint8_t itsConvertEndianness; //!< If set to true, we will need to swap bytes upon loading
+      //! If set to true,polymorphic pointers of unknown type will be loaded as nullptr
+      bool itsIgnoreUnknownPolymorphicTypes;
   };
 
   // ######################################################################
