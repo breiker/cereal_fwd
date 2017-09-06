@@ -31,6 +31,7 @@
 
 #include <cereal/cereal.hpp>
 #include <cereal/types/memory.hpp>
+#include <array>
 #include <cstring>
 #include <limits>
 #include <map>

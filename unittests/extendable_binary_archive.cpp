@@ -329,7 +329,7 @@ BOOST_AUTO_TEST_CASE(extendable_binary)
 BOOST_AUTO_TEST_CASE(extendable_archive_float_special_values)
 {
   {
-    using longdouble = typename cereal::longdouble<cereal::ExtendableBinaryInputArchive>::type;
+    using longdouble = cereal::longdouble<cereal::ExtendableBinaryInputArchive>::type;
     static_assert(std::is_same<longdouble, double>::value, "should be same");
 
     union ufloat
