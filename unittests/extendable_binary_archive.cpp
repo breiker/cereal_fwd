@@ -1,3 +1,6 @@
+/*! \file extendable_binary_archive.cpp
+    \brief Tests for extendable binary archive
+    \ingroup tests */
 /*
   Copyright (c) 2016, Randolph Voorhies, Shane Grant, Michal Breiter
   All rights reserved.

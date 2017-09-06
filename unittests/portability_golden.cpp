@@ -1,3 +1,6 @@
+/*! \file portability_golden.cpp
+    \brief Golden Master Testing for different architetures and archives
+    \ingroup tests */
 /*
   Copyright (c) 2016, Randolph Voorhies, Shane Grant, Michal Breiter
   All rights reserved.

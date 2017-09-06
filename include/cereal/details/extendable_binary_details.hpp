@@ -62,36 +62,36 @@ namespace cereal
     /*! Max size if four bits, then four bits for field specific encoding */
     enum class FieldType
     {
-        //! omitted field (0000)
+        /*!< omitted field (0000)  */
             omitted_field = 0x0,
-        /*! int (0001 | ssss)  size in bytes
+        /*!< int (0001 | ssss)  size in bytes
             Size is stored with one byte intervals up to 8 bytes, then full sizes.
             Max size 16 bytes */
             positive_integer = 0x1,
-        /*! int (0010 | ssss)  size in bytes
+        /*!< int (0010 | ssss)  size in bytes
             Size is stored with one byte intervals up to 8 bytes, then full sizes.
             Max size 16 bytes */
             negative_integer = 0x2,
-        //! float (0011 | size_of_floating_point)
+        /*!< float (0011 | size_of_floating_point) */
             floating_point = 0x3,
-        //! int packed (0100) (optional)
+        /*!< int packed (0100) (optional) */
             integer_packed = 0x4,
-        /*! class (0101) */
+        /*!< class (0101) */
             class_t = 0x5,
-        /*! pointer (0110)
+        /*!< pointer (0110)
              null
              shared - objectid follows
              virtual - typeid follows */
             pointer = 0x6,
-        /*! size for packed_array or containers (0111 | ssss) size in bytes
-            size mapping @see positive_integer or @see getIntSizeFromTagSize */
+        /*!< size for packed_array or containers (0111 | ssss) size in bytes
+            size mapping @see positive_integer or @see getIntSizeFromTagSize() */
             size_tag = 0x7,
-        /*! packed array (1000 | size of elem)
+        /*!< packed array (1000 | size of elem)
             e.g. string */
             packed_array = 0x8,
-        //! struct (1001)
+        /*!< struct (1001) */
             packed_struct = 0x9,
-        /*! was last field in class (1010)
+        /*!< was last field in class (1010)
          (not optional fields, class id) */
             last_field = 0xa,
         LAST_RESERVED_UNUSED
@@ -101,13 +101,13 @@ namespace cereal
     /*! Max size is four bits */
     enum class ClassMarkers : std::uint8_t
     {
-        //! for initialization or lack of properties
+        /*!< For initialization or lack of properties */
             None = 0,
-        //! optimalization for class without empty fields
-        /*! After empty class FieldType::last_field is not saved to save some space.*/
+        /*!< Optimalization for class without empty fields
+            After empty class FieldType::last_field is not saved to save some space.*/
             EmptyClass = 0x1 << 0,
-        // ! this class has version set to value bigger than 0
-        /*! After this tag version as varint is saved, so usually 1 byte. */
+        /*!< This class has version set to value bigger than 0
+            After this tag version as varint is saved, so usually 1 byte. */
             HasVersion = 0x1 << 1,
     };
 
@@ -116,6 +116,7 @@ namespace cereal
       l = static_cast<ClassMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
       return l;
     }
+
     std::uint8_t operator&(ClassMarkers l, ClassMarkers r)
     {
       return static_cast<std::uint8_t>(l) & static_cast<std::uint8_t>(r);
@@ -125,15 +126,15 @@ namespace cereal
     /*! Max size is four bits */
     enum class PointerMarkers : std::uint8_t
     {
-        //! for initialization or lack of properties
+        /*!< For initialization or lack of properties */
             None = 0,
-        //! nullptr or object with the same objectid was already saved
+        /*!< nullptr or object with the same object id was already saved */
             Empty = 0x1 << 0, // None (0) can be used
-        //! Pointer is shared (shared or weak_ptr)
-        /*! After this tag object id as varint will be saved */
+        /*!< Pointer is shared (shared or weak_ptr)
+             After this tag, object id as varint will be saved */
             IsSharedPtr = 0x1 << 1,
-        //! Pointer is polymorphic, casting will be needed
-        /*! After this tag polymorphic id as 4 byte std::int32_t will be saved */
+        /*!< Pointer is polymorphic, casting will be needed
+             After this tag, polymorphic id as 4 byte std::int32_t will be saved */
             IsPolymorphicPointer = 0x1 << 2
     };
 
@@ -142,6 +143,7 @@ namespace cereal
       l = static_cast<PointerMarkers>(static_cast<std::uint8_t>(l) | static_cast<std::uint8_t>(r));
       return l;
     }
+
     std::uint8_t operator&(PointerMarkers l, PointerMarkers r)
     {
       return static_cast<std::uint8_t>(l) & static_cast<std::uint8_t>(r);
@@ -186,19 +188,6 @@ namespace cereal
       return 1;
     }
 
-    inline std::uint8_t getFloatSizeFromTagSize(std::uint8_t tagSize)
-    {
-      switch (tagSize) {
-        case 1:
-          return 4;
-        case 2:
-          return 8;
-        default:
-          throw Exception("Unsupported floating point size");
-      }
-    }
-
-
     template <class T> inline
     T getqNaN();
 
@@ -218,12 +207,28 @@ namespace cereal
       return d.d;
     }
 
+    //! Get quiet not a number value for type
     template <class T> inline
     T getqNaN()
     {
       static_assert(traits::detail::delay_static_assert<T>::value, "unknown qNaN value");
     }
 
+    //! Get size of floating point data for size identifier
+    inline std::uint8_t getFloatSizeFromTagSize(std::uint8_t tagSize)
+    {
+      switch (tagSize) {
+        case 1:
+          return 4;
+        case 2:
+          return 8;
+        default:
+          throw Exception("Unsupported floating point size");
+      }
+    }
+
+    //! Get size identifier for floating point type
+    /*! @tparam T floating point type */
     template <class T> inline
     std::uint8_t getTagSizeFromFloatType()
     {
@@ -237,6 +242,7 @@ namespace cereal
       }
     }
 
+    //! Get number of bytes to load based on value of identifier for integer tag
     inline std::uint8_t getIntSizeFromTagSize(std::uint8_t tagSize)
     {
       switch (tagSize) {
@@ -259,6 +265,8 @@ namespace cereal
       }
     }
 
+
+    //! Get identifier for size for integer tag based on number of bytes being stored
     inline std::uint8_t getIntSizeTagFromByteCount(unsigned int byteCount) {
       if(byteCount <= 8) {
         return byteCount;
@@ -271,15 +279,31 @@ namespace cereal
       }
     }
 
+    //! Struct to keep position of start and end in stream
     struct StreamPos
     {
       std::streamoff start;
       std::streamoff end;
     };
 
+    //! Class used as an adapter to queue of streams
+    /*! Two streams are managed. Main stream can be used only for reading and reading position
+        can move only forward. Position of reading for second stream can be moved freely.
+        For second stream queue of start and end positions is kept. New StreamPos can be added
+        when last StreamPos was not yet read fully. When StreamPos::end for top StreamPos is reached
+        reading from next StreamPos is continued. If there are no StreamPos on the queue data
+        is read from main stream.
+
+        Additional functions for copying data from one stream to the other are provided (readToOtherStream()).
+     */
     class StreamAdapter
     {
       public:
+        //! Construct new object with main and secondary stream
+        /*! @param stream main reading stream
+            @param sharedObjectStream secondary stream for which new reading positions could be given
+            @param maxBytesInSharedStream max size of data copied to other stream in readToOtherStream() method
+         */
         StreamAdapter(std::istream & stream, std::stringstream & sharedObjectStream, std::size_t maxBytesInSharedStream)
             : nowReading(nullptr), bytesLeft(0), endOfWritingStream(0), startOfStream(sharedObjectStream.tellg()),
               mainStream(stream), backStream(sharedObjectStream), maxBytesSharedStream(maxBytesInSharedStream)
@@ -305,7 +329,7 @@ namespace cereal
         //! Reads binary data from stream which is on top
         /*! @param data address to read to
             @param size size of data to read
-            Size has to be less or equal to data available curren stream position. That is:
+            Size has to be less or equal to data available at the current stream position. That is:
             - If using streamPos on queue - end of current streamPos
             - If using mainStream - end of mainStream
             Throws if not enough bytes are read. */
@@ -328,7 +352,7 @@ namespace cereal
         }
 
         //! Discards size bytes from the input stream
-        /*! @param size The number of bytes in the data
+        /*! @param size The number of bytes of data
             Throws if not enough bytes are read */
         inline void skipData(std::size_t size)
         {
@@ -350,6 +374,11 @@ namespace cereal
           if (streamError)
             throw Exception("Failed to skip " + std::to_string(size) + " bytes from input stream!");
         }
+
+        //! Check if by adding size bytes limit for max copied data is hit
+        /*! @param size additional size bytes to read
+            @param stream Stream used for data copying
+            Throws Exception if limit would be hit */
         inline void checkIfMaxSize(std::size_t size, std::ostream& stream)
         {
           std::size_t posNow = static_cast<std::size_t>(stream.tellp());
@@ -360,8 +389,8 @@ namespace cereal
 
         //! Reads size bytes from the input stream and copies them to other stream
         /*! @param size The number of bytes to read and copy
-            @param
-            Throws if not enough bytes are read */
+            @param stream Stream to copy data to
+            Throws Exception if not enough bytes are read */
         inline void readToOtherStream(std::size_t size, std::ostream & stream)
         {
           checkIfMaxSize(size, stream);
@@ -393,6 +422,8 @@ namespace cereal
         }
 
       private:
+
+        //! Finish reading current StreamPos
         void popStream()
         {
           if (backStreams.empty()) {
@@ -411,18 +442,15 @@ namespace cereal
         }
 
       private:
-        //! current reading stream position
-        StreamPos *nowReading;
-        //! how many bytes are left for nowReading position
-        std::size_t bytesLeft;
-        //! end of writing backStream, will be restored when reading from other position is done
-        std::size_t endOfWritingStream;
-        //! start of stream at construction
-        const std::size_t startOfStream;
+        StreamPos *nowReading; //!< current reading stream position
+        std::size_t bytesLeft; //!< how many bytes are left for nowReading position
+        std::size_t endOfWritingStream; //!< end of writing backStream,
+                                        //!< will be restored when reading from other position is done
+        const std::size_t startOfStream; //!< start of stream at construction of object
         std::queue<std::pair<std::size_t, StreamPos *>> backStreams;
-        std::istream & mainStream;
-        std::istream & backStream;
-        const std::size_t maxBytesSharedStream;
+        std::istream & mainStream; //!< main reading stream
+        std::istream & backStream; //!< stream to keep data from skipped shared pointers
+        const std::size_t maxBytesSharedStream; //!< max allowed size of data copied to backStream
     };
   } // namespace extendable_binary_detail
 } // namespace cereal

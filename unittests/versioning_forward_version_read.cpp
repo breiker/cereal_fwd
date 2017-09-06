@@ -1,5 +1,5 @@
-/*! \file versioning_forward_version_read.hpp
-    \brief Check
+/*! \file versioning_forward_version_read.cpp
+    \brief Test reading class version in forward compatibility situations
     \ingroup tests */
 /*
   Copyright (c) 2016, Randolph Voorhies, Shane Grant, Michal Breiter

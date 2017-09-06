@@ -745,7 +745,7 @@ namespace cereal
           a polymorphic load.
 
           @param id The unique id that was serialized for the polymorphic type
-          @return The string identifier for the tyep */
+          @return The string identifier for the type */
       inline std::string getPolymorphicName(std::uint32_t const id)
       {
         auto name = itsPolymorphicTypeMap.find( id );
