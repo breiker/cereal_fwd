@@ -6,6 +6,8 @@ Library is under active developement and parts of it may change.
 This documentation is intended as an extension to official cereal
 documentation available at <http://uscilab.github.io/cereal/index.html>.
 
+Doxygen documentation is available at <https://breiker.github.io/cereal_fwd/doxygen/index.html>.
+
 Introduction
 ============
 
