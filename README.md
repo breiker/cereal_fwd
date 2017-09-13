@@ -67,7 +67,7 @@ space saving purposes size of saved integer is determined as minimal
 number of bytes needed to represent stored number.\
 Note that above optimizations are not used when handing arrays of binary
 data (e.g. vector or array of integers). Fixed size integers should be
-preferred for types used for such situations.
+preferred for types used in such situations.
 
 Added features
 ==============
@@ -97,7 +97,7 @@ value of that method indicates if field was saved to archive or
 
 Possible return value can be seen in table below:\
 T - type is written/read\
-O - OmittedFieldTag is used\
+O - OmittedFieldTag is used
 
 
   |Writing side   |Reading side   |Return value|
@@ -167,6 +167,21 @@ into memory buffer for later usage. Moving back in stream is not an
 option since that would break streaming support. Please note that in
 worst case scenario size of in memory buffer can be close to original
 size of archive.
+Maximum size of memory buffer can be limited by passing modified 
+*Options* to *ExtendableBinaryInputArchive* constructor. Size can be
+changed with Options::maxSharedBufferSize method. If maximum size is
+exceeded exception will be thrown.
+
+Unknown polymorphic pointers
+----------------------------
+
+Trying to read unknown or not registered polymorphic pointer would
+normally result in exception being thrown. That means that introducing
+new derived class would have to be done by adding new field and not using
+existing base class pointer. In ExtendableBinaryArchive exception is not
+thrown when reading unknown polymorphic pointer, field is just set to
+nullptr. This behavior can be disabled with *ignoreUnknownPolymorphicTypes*
+method in archive's *Options* class.
 
 Class evolution
 ===============
@@ -256,10 +271,61 @@ Forbidden changes
 
 -   Changing order in which fields are serialized.
 
--   Adding field for serialization without updating class version and
-    loading it without checking version.
+-   Adding new field for serialization without updating class version
+    and loading it without checking version.
 
--   Adding field for serialization not as the last field.
+-   Adding new field for serialization not as the last field.
+
+Basic usage
+============
+
+Library is header only. To use it *include* folder has to be added to include directories.
+
+Sample usage can be found below:
+
+    #include <memory>
+    #include <fstream>
+    #include <cassert>
+    
+    #include <cereal/types/polymorphic.hpp> // for polymorphic pointers
+    #include <cereal/types/string.hpp> // for string
+    #include <cereal/archives/extendable_binary.hpp>
+
+    class B {
+    public:
+        virtual ~B() {}
+        int b = 3;
+        template <class Archive>
+        void serialize(Archive & ar, const std::uint32_t version) {
+            ar(b);
+        }
+    };
+    class A : public B {
+    public:
+        std::string a = "char";
+        template <class Archive>
+        void serialize(Archive & ar, const std::uint32_t version) {
+            ar(cereal::base_class<B>(this));
+            ar(a);
+        }
+    };
+    CEREAL_REGISTER_TYPE(A)
+
+    int main() {
+        std::unique_ptr<B> ptr_o = std::make_unique<A>();
+        {
+        std::ofstream ofs("filename", std::ios::binary);
+        cereal::ExtendableBinaryOutputArchive oa(ofs);
+        oa(ptr_o);
+        }
+
+        std::unique_ptr<B> ptr_i;
+        std::ifstream ifs("filename", std::ios::binary);
+        cereal::ExtendableBinaryInputArchive ia(ifs);
+        ia(ptr_i);
+        assert(ptr_i != nullptr && ptr_o->b == ptr_i->b);
+        assert(typeid(ptr_i) == typeid(ptr_o));
+    }
 
 
 Planned changes
