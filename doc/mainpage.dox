@@ -1,9 +1,10 @@
 /**
-\mainpage cereal code documentation
+\mainpage cereal_fwd code documentation
 
 \tableofcontents
 
-Aside from the <a href="../../index.html">documentation</a> presented on the main cereal site, this doxygen
+Short summary of changes can be found at <a href="https://github.com/breiker/cereal_fwd">github</a>.
+Aside from the <a href="http://uscilab.github.io/cereal/index.html">documentation</a> presented on the main cereal site, this doxygen
 page offers code level documentation.
 
 \section modules Browse modules
