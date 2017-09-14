@@ -74,7 +74,7 @@ $(function() {
 <p>A class that can be made a friend to give cereal access to non public functions.  
  <a href="classcereal_1_1access.html#details">More...</a></p>
 
-<p><code>#include &lt;<a class="el" href="access_8hpp_source.html">/data_ext/code/cereal_fwd/include/cereal/access.hpp</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="access_8hpp_source.html">/home/breiker/code/git/cereal_fwd_github/include/cereal/access.hpp</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
@@ -163,13 +163,13 @@ template&lt;class T , class Archive &gt; </td></tr>
 <div class="textblock"><p>A class that can be made a friend to give cereal access to non public functions. </p>
 <p>If you desire non-public serialization functions within a class, cereal can only access these if you declare <a class="el" href="classcereal_1_1access.html" title="A class that can be made a friend to give cereal access to non public functions. ">cereal::access</a> a friend.</p>
 <div class="fragment"><div class="line"><span class="keyword">class </span>MyClass</div><div class="line">{</div><div class="line">  <span class="keyword">private</span>:</div><div class="line">    <span class="keyword">friend</span> <span class="keyword">class </span><a class="code" href="classcereal_1_1access.html">cereal::access</a>; <span class="comment">// gives access to the private serialize</span></div><div class="line"></div><div class="line">    <span class="keyword">template</span> &lt;<span class="keyword">class</span> Archive&gt;</div><div class="line">    <span class="keywordtype">void</span> <a class="code" href="functional_8hpp.html#a02f9cfc9a4055c8a49eb050b02cd3357">serialize</a>( Archive &amp; ar )</div><div class="line">    {</div><div class="line">      <span class="comment">// some code</span></div><div class="line">    }</div><div class="line">};</div></div><!-- fragment --> </div><hr/>The documentation for this class was generated from the following file:<ul>
-<li>/data_ext/code/cereal_fwd/include/cereal/<a class="el" href="access_8hpp_source.html">access.hpp</a></li>
+<li>/home/breiker/code/git/cereal_fwd_github/include/cereal/<a class="el" href="access_8hpp_source.html">access.hpp</a></li>
 </ul>
 </div><!-- contents -->
 <!-- HTML footer for doxygen 1.8.3.1-->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Wed Sep 6 2017 02:50:48 for cereal_fwd by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Thu Sep 14 2017 11:40:28 for cereal_fwd by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.8.13
 </small></address>

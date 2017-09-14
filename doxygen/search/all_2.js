@@ -62,5 +62,5 @@ var searchData=
   ['count_5fspecializations',['count_specializations',['../structcereal_1_1traits_1_1detail_1_1count__specializations.html',1,'cereal::traits::detail']]],
   ['counter',['counter',['../structcereal_1_1XMLOutputArchive_1_1NodeInfo.html#ac7786637d9acb060450d67fcbab4cd04',1,'cereal::XMLOutputArchive::NodeInfo']]],
   ['create_5fbindings',['create_bindings',['../structcereal_1_1detail_1_1create__bindings.html',1,'cereal::detail']]],
-  ['cereal_20code_20documentation',['cereal code documentation',['../index.html',1,'']]]
+  ['cereal_5ffwd_20code_20documentation',['cereal_fwd code documentation',['../index.html',1,'']]]
 ];
